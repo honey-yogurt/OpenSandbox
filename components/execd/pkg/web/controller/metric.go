@@ -33,22 +33,38 @@ type MetricController struct {
 	*basicController
 }
 
+var readRuntimeMetrics = func() (*model.Metrics, error) {
+	metric := model.NewMetrics()
+
+	metric.CpuCount = float64(runtime.GOMAXPROCS(-1))
+	cpuPercent, err := cpu.Percent(time.Second, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get CPU percent: %w", err)
+	}
+	if len(cpuPercent) == 0 {
+		return nil, fmt.Errorf("CPU usage returned no samples")
+	}
+	metric.CpuUsedPct = cpuPercent[0]
+
+	vmStat, err := mem.VirtualMemory()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get memory info: %w", err)
+	}
+	if vmStat.Total == 0 {
+		return nil, fmt.Errorf("memory usage returned no total")
+	}
+	metric.MemTotalMiB = float64(vmStat.Total) / 1024 / 1024
+	metric.MemUsedMiB = float64(vmStat.Used) / 1024 / 1024
+
+	return metric, nil
+}
+
 func NewMetricController(ctx *gin.Context) *MetricController {
 	return &MetricController{basicController: newBasicController(ctx)}
 }
 
 func (c *MetricController) GetMetrics() {
-	metrics, err := c.readMetrics()
-	if err != nil {
-		c.RespondError(
-			http.StatusInternalServerError,
-			model.ErrorCodeRuntimeError,
-			fmt.Sprintf("error reading runtime metrics. %v", err),
-		)
-		return
-	}
-
-	c.RespondSuccess(metrics)
+	c.RespondSuccess(c.readMetrics())
 }
 
 func (c *MetricController) WatchMetrics() {
@@ -63,45 +79,23 @@ func (c *MetricController) WatchMetrics() {
 				if flusher, ok := c.ctx.Writer.(http.Flusher); ok {
 					defer flusher.Flush()
 				}
-				metrics, err := c.readMetrics()
+				metrics := c.readMetrics()
+				msg, _ := json.Marshal(metrics) //nolint:errchkjson
+				_, err := c.ctx.Writer.Write(append(msg, '\n'))
 				if err != nil {
-					msg, _ := json.Marshal(map[string]string{ //nolint:errchkjson
-						"error": err.Error(),
-					})
-					_, err = c.ctx.Writer.Write(append(msg, '\n'))
-					if err != nil {
-						log.Error("metrics: write %s: %v", string(msg), err)
-					}
-				} else {
-					msg, _ := json.Marshal(metrics) //nolint:errchkjson
-					_, err = c.ctx.Writer.Write(append(msg, '\n'))
-					if err != nil {
-						log.Error("metrics: write %s: %v", string(msg), err)
-					}
+					log.Error("metrics: write %s: %v", string(msg), err)
 				}
 			}()
 		}
 	}
 }
 
-func (c *MetricController) readMetrics() (*model.Metrics, error) {
-	metric := model.NewMetrics()
-
-	metric.CpuCount = float64(runtime.GOMAXPROCS(-1))
-	cpuPercent, err := cpu.Percent(time.Second, false)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get CPU percent: %w", err)
-	}
-	if len(cpuPercent) > 0 {
-		metric.CpuUsedPct = cpuPercent[0]
+func (c *MetricController) readMetrics() *model.Metrics {
+	metric, err := readRuntimeMetrics()
+	if err != nil || metric == nil {
+		log.Warn("metrics: collection unavailable: %v", err)
+		return model.NewUnavailableMetrics()
 	}
 
-	vmStat, err := mem.VirtualMemory()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get memory info: %w", err)
-	}
-	metric.MemTotalMiB = float64(vmStat.Total) / 1024 / 1024
-	metric.MemUsedMiB = float64(vmStat.Used) / 1024 / 1024
-
-	return metric, nil
+	return metric
 }

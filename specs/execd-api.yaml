@@ -1756,13 +1756,14 @@ paths:
       description: |
         Retrieves current system resource metrics including CPU usage percentage,
         CPU core count, total memory, used memory, and timestamp. Provides a snapshot
-        of system resource utilization at the time of request.
+        of system resource utilization at the time of request. When metrics cannot be
+        collected, the response is `{"available": false}` without zero-valued metrics.
       operationId: getMetrics
       tags:
         - Metric
       responses:
         "200":
-          description: Current system metrics including CPU and memory usage
+          description: Current system metrics including availability and CPU/memory usage
           content:
             application/json:
               schema:
@@ -2906,35 +2907,39 @@ components:
 
     Metrics:
       type: object
-      description: System resource usage metrics
+      description: System resource usage metrics and collection availability
       properties:
+        available:
+          type: boolean
+          description: Whether resource metrics were collected successfully
+          example: true
         cpu_count:
           type: number
           format: float
-          description: Number of CPU cores
+          description: Number of CPU cores; present when available is true
           example: 4.0
         cpu_used_pct:
           type: number
           format: float
-          description: CPU usage percentage
+          description: CPU usage percentage; present when available is true
           example: 45.5
         mem_total_mib:
           type: number
           format: float
-          description: Total memory in MiB
+          description: Total memory in MiB; present when available is true
           example: 8192.0
         mem_used_mib:
           type: number
           format: float
-          description: Used memory in MiB
+          description: Used memory in MiB; present when available is true
           example: 4096.0
         timestamp:
           type: integer
           format: int64
-          description: Timestamp when metrics were collected (Unix milliseconds)
+          description: Timestamp when metrics were collected (Unix milliseconds); present when available is true
           example: 1700000000000
       required:
-        [cpu_count, cpu_used_pct, mem_total_mib, mem_used_mib, timestamp]
+        [available]
 
     ErrorResponse:
       type: object

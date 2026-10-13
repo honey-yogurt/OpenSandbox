@@ -14,9 +14,13 @@
 
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Metrics struct {
+	Available   bool    `json:"available"`
 	CpuCount    float64 `json:"cpu_count"`
 	CpuUsedPct  float64 `json:"cpu_used_pct"`
 	MemTotalMiB float64 `json:"mem_total_mib"`
@@ -26,10 +30,39 @@ type Metrics struct {
 
 func NewMetrics() *Metrics {
 	return &Metrics{
+		Available:   true,
 		CpuCount:    0,
 		CpuUsedPct:  0,
 		MemTotalMiB: 0,
 		MemUsedMiB:  0,
 		Timestamp:   time.Now().UnixMilli(),
 	}
+}
+
+func NewUnavailableMetrics() *Metrics {
+	return &Metrics{Available: false}
+}
+
+func (m Metrics) MarshalJSON() ([]byte, error) {
+	if !m.Available {
+		return json.Marshal(struct {
+			Available bool `json:"available"`
+		}{Available: false})
+	}
+
+	return json.Marshal(struct {
+		Available   bool    `json:"available"`
+		CpuCount    float64 `json:"cpu_count"`
+		CpuUsedPct  float64 `json:"cpu_used_pct"`
+		MemTotalMiB float64 `json:"mem_total_mib"`
+		MemUsedMiB  float64 `json:"mem_used_mib"`
+		Timestamp   int64   `json:"timestamp"`
+	}{
+		Available:   m.Available,
+		CpuCount:    m.CpuCount,
+		CpuUsedPct:  m.CpuUsedPct,
+		MemTotalMiB: m.MemTotalMiB,
+		MemUsedMiB:  m.MemUsedMiB,
+		Timestamp:   m.Timestamp,
+	})
 }

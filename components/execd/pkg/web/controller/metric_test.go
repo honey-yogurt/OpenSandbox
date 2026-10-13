@@ -36,10 +36,10 @@ func setupMetricController(method, path string) (*MetricController, *httptest.Re
 func TestReadMetrics(t *testing.T) {
 	ctrl := &MetricController{}
 
-	metrics, err := ctrl.readMetrics()
+	metrics := ctrl.readMetrics()
 
-	assert.NoError(t, err)
 	assert.NotNil(t, metrics)
+	assert.True(t, metrics.Available)
 
 	assert.Greater(t, metrics.CpuCount, 0.0)
 
@@ -66,12 +66,28 @@ func TestGetMetricsEndpoint(t *testing.T) {
 	var metrics model.Metrics
 	err := json.Unmarshal(w.Body.Bytes(), &metrics)
 	assert.NoError(t, err)
+	assert.True(t, metrics.Available)
 
 	assert.Greater(t, metrics.CpuCount, 0.0)
 	assert.GreaterOrEqual(t, metrics.CpuUsedPct, 0.0)
 	assert.Greater(t, metrics.MemTotalMiB, 0.0)
 	assert.GreaterOrEqual(t, metrics.MemUsedMiB, 0.0)
 	assert.NotZero(t, metrics.Timestamp)
+}
+
+func TestGetMetricsUnavailableEndpoint(t *testing.T) {
+	original := readRuntimeMetrics
+	readRuntimeMetrics = func() (*model.Metrics, error) {
+		return nil, assert.AnError
+	}
+	t.Cleanup(func() { readRuntimeMetrics = original })
+
+	ctrl, w := setupMetricController("GET", "/api/metrics")
+
+	ctrl.GetMetrics()
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, `{"available":false}`, w.Body.String())
 }
 
 func TestWatchMetricsHeaders(t *testing.T) {
@@ -94,6 +110,7 @@ func TestWatchMetricsHeaders(t *testing.T) {
 
 func TestMetricSerialization(t *testing.T) {
 	metrics := &model.Metrics{
+		Available:   true,
 		CpuCount:    4,
 		CpuUsedPct:  25.5,
 		MemTotalMiB: 8192,
@@ -112,4 +129,20 @@ func TestMetricSerialization(t *testing.T) {
 	assert.Equal(t, float64(8192), decoded["mem_total_mib"])
 	assert.Equal(t, float64(4096), decoded["mem_used_mib"])
 	assert.NotEmpty(t, decoded["timestamp"])
+	assert.Equal(t, true, decoded["available"])
+}
+
+func TestUnavailableMetricSerialization(t *testing.T) {
+	data, err := json.Marshal(model.NewUnavailableMetrics())
+	require.NoError(t, err)
+
+	assert.JSONEq(t, `{"available":false}`, string(data))
+
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(data, &decoded))
+	assert.NotContains(t, decoded, "cpu_count")
+	assert.NotContains(t, decoded, "cpu_used_pct")
+	assert.NotContains(t, decoded, "mem_total_mib")
+	assert.NotContains(t, decoded, "mem_used_mib")
+	assert.NotContains(t, decoded, "timestamp")
 }
