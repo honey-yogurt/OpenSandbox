@@ -1252,11 +1252,14 @@ export interface components {
             timeoutSeconds?: number;
         };
         /**
-         * @description Extensible container for sandbox lifecycle hooks. All fields are optional.
-         *     Future lifecycle events are added as new optional fields without changing
-         *     the semantics of existing fields.
+         * @description Extensible container for sandbox lifecycle configuration. All fields
+         *     are optional. Future lifecycle events are added as new optional
+         *     fields without changing the semantics of existing fields.
          *
-         *     This release supports only `preStart` and `periodic`.
+         *     `preStart` and `periodic` are hooks executed inside the sandbox by
+         *     execd. `idlePolicy` is control-plane policy (OSEP-0024): it tells the
+         *     server how to treat the sandbox's state machine and never reaches the
+         *     guest.
          */
         SandboxLifecycle: {
             /**
@@ -1271,6 +1274,78 @@ export interface components {
              *     its previous run is still active.
              */
             periodic?: components["schemas"]["PeriodicLifecycleHook"][];
+            /**
+             * @description Auto-pause and wake-on-access behavior (OSEP-0024). Supported only
+             *     by the fast-sandbox backend; other backends reject the field.
+             *     Omitting `idlePolicy` preserves non-automated behavior exactly:
+             *     the sandbox is never auto-paused and never auto-woken.
+             */
+            idlePolicy?: components["schemas"]["IdlePolicy"];
+        };
+        /**
+         * @description Idle behavior declared by the sandbox (OSEP-0024). The policy is
+         *     desired state: the server validates it and persists it as the
+         *     reserved `sandbox.opensandbox.io/idle-policy` Sandbox CR annotation.
+         *
+         *     With `idleTimeoutSeconds`, the sandbox is auto-paused after that many
+         *     seconds without ingress-observed activity. Without it, the policy is
+         *     wake-only: the sandbox is never auto-paused, but a (manually) paused
+         *     sandbox wakes on access. A missing, malformed, or invalid policy is
+         *     treated exactly as absent — never as an implicit opt-in.
+         *
+         *     Constraints: `idleTimeoutSeconds` must not exceed the server's
+         *     configured activity TTL (default 1800), so a present-but-stale
+         *     activity key always implies idle-by-value. Enabling deployment flags
+         *     never changes the behavior of sandboxes that do not declare a policy.
+         */
+        IdlePolicy: {
+            /**
+             * @description Idle threshold X in seconds: the sandbox is auto-paused after X
+             *     continuously idle seconds. Absent together with `onIdle` means a
+             *     wake-only policy.
+             */
+            idleTimeoutSeconds?: number;
+            /**
+             * @description Action taken at the idle threshold. Required with, and only
+             *     valid with, `idleTimeoutSeconds`. Only `pause` exists today; the
+             *     enum exists so future actions are additive.
+             * @enum {string}
+             */
+            onIdle?: "pause";
+            /**
+             * @description Whether incoming traffic may wake the sandbox from `Paused`.
+             *     `false` keeps today's paused behavior (permanent 503 through the
+             *     gateway) and only `POST /sandboxes/{sandboxId}/resume` restores
+             *     the sandbox.
+             * @default true
+             */
+            wakeOnAccess: boolean;
+            /**
+             * @description Application-declared activity probe. When the sandbox is
+             *     otherwise idle, the server issues `GET {path}` on `{port}`;
+             *     `200 {"active": true}` counts as activity and resets the idle
+             *     clock, while `{"active": false}`, any failure, or a timeout
+             *     records nothing. Relevant only with auto-pause.
+             */
+            activeProbe?: components["schemas"]["ActivityProbe"];
+        };
+        /**
+         * @description Endpoint inside the sandbox that answers `{"active": bool,
+         *     "message"?: string}` with 200 while work is in progress.
+         */
+        ActivityProbe: {
+            /** @description Sandbox port serving the probe endpoint. */
+            port: number;
+            /**
+             * @description Absolute HTTP path of the probe endpoint. Must not contain
+             *     whitespace or control characters.
+             */
+            path: string;
+            /**
+             * @description Probe request budget in seconds. The server defaults to 2 when omitted.
+             * @default 2
+             */
+            timeoutSeconds: number;
         };
         /**
          * @description JSON Merge Patch (RFC 7396) request body for updating sandbox metadata.
@@ -1307,7 +1382,7 @@ export interface components {
          *     optional; when omitted, the server creates a per-allocation task using
          *     `['tail', '-f', '/dev/null']`. The Pool must run task-executor and provide
          *     bootstrap plus execd.
-         *     `snapshotId`, `networkPolicy`, `platform`, `volumes`, and
+         *     `snapshotId`, `networkPolicy`, `filePolicy`, `platform`, `volumes`, and
          *     `credentialProxy.enabled` must not be provided together with `poolRef`.
          *
          *     **Note**: API Key authentication is required via the `OPEN-SANDBOX-API-KEY` header.
@@ -1329,8 +1404,11 @@ export interface components {
              *     Mutually exclusive with `image` and `snapshotId`; in template mode
              *     the workload shape is fixed by the template's golden image, so
              *     `entrypoint`, `env`, `resourceLimits`, `resourceRequests`,
-             *     `volumes`, `platform`, `credentialProxy`, `secureAccess` and
-             *     `lifecycle` are rejected (400), and `timeout` is required.
+             *     `volumes`, `platform`, `credentialProxy`, `secureAccess`,
+             *     `filePolicy`, and lifecycle hooks are rejected (400), and `timeout`
+             *     is required.
+             *     `lifecycle.idlePolicy` is allowed: it is control-plane state,
+             *     not workload shape.
              *     The template must belong to the requester's tenant and be
              *     `Succeeded`; anything else yields 404 (no existence leak).
              */
@@ -1393,17 +1471,27 @@ export interface components {
                 [key: string]: string;
             };
             /**
-             * @description Optional declarative sandbox lifecycle hooks. This release supports
-             *     `preStart` and `periodic`. The server transports this configuration to
-             *     execd; callers must not depend on the internal transport mechanism.
-             *     The configuration is not included in Sandbox responses.
+             * @description Optional declarative sandbox lifecycle configuration. `preStart`
+             *     and `periodic` are hooks; the server transports them to execd and
+             *     callers must not depend on the internal transport mechanism. The
+             *     configuration is not included in Sandbox responses.
              *
-             *     Not supported together with `extensions.poolRef`, because Pool Pods
-             *     are pre-created before request-specific lifecycle hooks are known.
-             *     Runtimes that do not implement lifecycle hook transport reject this
-             *     field.
+             *     Lifecycle hooks are not supported together with
+             *     `extensions.poolRef`, because Pool Pods are pre-created before
+             *     request-specific hooks are known. Runtimes that do not implement
+             *     lifecycle hook transport reject hooks. `lifecycle.idlePolicy` is
+             *     not a hook and may accompany `extensions.poolRef`; it is honored
+             *     only by the fast-sandbox backend and rejected by others.
              */
             lifecycle?: components["schemas"]["SandboxLifecycle"];
+            /**
+             * @description Optional roots that restrict execd upload and download operations.
+             *     Paths are resolved and checked after symlink resolution; requests
+             *     outside the configured roots return 403. Omitted or null retains
+             *     legacy unrestricted transfer behavior for backward compatibility.
+             *     Not supported together with `extensions.poolRef` or `templateId`.
+             */
+            filePolicy?: components["schemas"]["FilePolicy"];
             /**
              * @description The command to execute as the sandbox's entry process.
              *
@@ -1578,6 +1666,26 @@ export interface components {
             defaultAction?: "allow" | "deny";
             /** @description List of egress rules evaluated in order. */
             egress?: components["schemas"]["NetworkRule"][];
+        };
+        /**
+         * @description File-transfer roots enforced by execd. Each root is an absolute path
+         *     inside the sandbox. An empty list denies the corresponding operation.
+         */
+        FilePolicy: {
+            /**
+             * @description Absolute directories from which files may be downloaded.
+             * @example [
+             *       "/workspace/output"
+             *     ]
+             */
+            downloadRoots?: string[];
+            /**
+             * @description Absolute directories to which files may be uploaded.
+             * @example [
+             *       "/workspace/input"
+             *     ]
+             */
+            uploadRoots?: string[];
         };
         /**
          * @description Credential Vault proxy startup settings. This is an explicit opt-in for

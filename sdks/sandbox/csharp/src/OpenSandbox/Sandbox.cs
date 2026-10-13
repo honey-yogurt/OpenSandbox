@@ -220,6 +220,7 @@ public sealed class Sandbox : IAsyncDisposable
                     Egress = options.NetworkPolicy.Egress
                 }
                 : null,
+            FilePolicy = options.FilePolicy,
             CredentialProxy = options.CredentialProxy,
             Volumes = options.Volumes,
             Extensions = options.Extensions?.ToDictionary(kv => kv.Key, kv => (object)kv.Value)

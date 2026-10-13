@@ -31,6 +31,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sys/unix"
 
+	"github.com/alibaba/opensandbox/execd/pkg/filepolicy"
 	"github.com/alibaba/opensandbox/execd/pkg/runtime"
 	"github.com/alibaba/opensandbox/execd/pkg/web/model"
 )
@@ -59,6 +60,9 @@ func serveFilesystemIdentity(c *gin.Context, uid, gid uint32) {
 	// Re-exec the currently running inode, rather than resolving an executable
 	// through a workload-controlled PATH or a replaceable filesystem path.
 	cmd := exec.Command("/proc/self/exe", FilesystemWorkerArg, c.Param("uid"), c.Param("gid"))
+	if policyEnv, ok := filepolicy.TransportEnv(); ok {
+		cmd.Env = append(os.Environ(), policyEnv)
+	}
 	cmd.ExtraFiles = []*os.File{child}
 	cmd.Stderr = os.Stderr
 	stop, err := runtime.StartFilesystemWorker(cmd, uid, gid)
@@ -102,6 +106,9 @@ func serveFilesystemIdentity(c *gin.Context, uid, gid uint32) {
 func RunFilesystemWorker() error {
 	if len(os.Args) != 4 {
 		return fmt.Errorf("invalid filesystem worker arguments")
+	}
+	if err := filepolicy.LoadFromEnv(); err != nil {
+		return fmt.Errorf("file policy: %w", err)
 	}
 	uid, err := parseFilesystemID(os.Args[2])
 	if err != nil {

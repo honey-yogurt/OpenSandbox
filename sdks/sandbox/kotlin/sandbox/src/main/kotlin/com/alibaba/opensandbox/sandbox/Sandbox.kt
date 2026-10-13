@@ -26,6 +26,7 @@ import com.alibaba.opensandbox.sandbox.domain.models.diagnostics.DiagnosticConte
 import com.alibaba.opensandbox.sandbox.domain.models.execd.DEFAULT_EGRESS_PORT
 import com.alibaba.opensandbox.sandbox.domain.models.execd.DEFAULT_EXECD_PORT
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.CredentialProxyConfig
+import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.FilePolicy
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.NetworkPolicy
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.NetworkRule
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.PlatformSpec
@@ -453,6 +454,7 @@ class Sandbox internal constructor(
             volumes: List<Volume>?,
             resourceRequests: Map<String, String>? = null,
             lifecycle: SandboxLifecycle? = null,
+            filePolicy: FilePolicy? = null,
         ): Sandbox {
             val timeoutLabel = if (timeout != null) "${timeout.seconds}s" else "manual-cleanup"
             val startupSource = imageSpec?.image ?: snapshotId
@@ -486,6 +488,7 @@ class Sandbox internal constructor(
                                 snapshotId = snapshotId,
                                 resourceRequests = resourceRequests,
                                 lifecycle = lifecycle,
+                                filePolicy = filePolicy,
                             )
                         createdSandboxId = response.id
                         InitializationResult.NewSandbox(response.id)
@@ -1083,6 +1086,9 @@ class Sandbox internal constructor(
          */
         private var networkPolicy: NetworkPolicy? = null
 
+        /** Optional file-transfer roots. */
+        private var filePolicy: FilePolicy? = null
+
         /**
          * Optional Credential Vault proxy startup settings.
          */
@@ -1337,6 +1343,24 @@ class Sandbox internal constructor(
             val builder = NetworkPolicy.builder()
             builder.configure()
             this.networkPolicy = builder.build()
+            return this
+        }
+
+        /**
+         * Sets sandbox file-transfer roots.
+         */
+        fun filePolicy(filePolicy: FilePolicy): Builder {
+            this.filePolicy = filePolicy
+            return this
+        }
+
+        /**
+         * Configures sandbox file-transfer roots.
+         */
+        fun filePolicy(configure: FilePolicy.Builder.() -> Unit): Builder {
+            val builder = FilePolicy.builder()
+            builder.configure()
+            this.filePolicy = builder.build()
             return this
         }
 
@@ -1620,6 +1644,7 @@ class Sandbox internal constructor(
                 volumes = if (volumes.isEmpty()) null else volumes.toList(),
                 resourceRequests = resourceRequests,
                 lifecycle = lifecycle,
+                filePolicy = filePolicy,
             )
         }
     }

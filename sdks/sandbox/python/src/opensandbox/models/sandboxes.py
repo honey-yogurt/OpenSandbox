@@ -152,6 +152,25 @@ class NetworkPolicy(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class FilePolicy(BaseModel):
+    """
+    File-transfer roots enforced by execd.
+    """
+
+    download_roots: list[str] = Field(
+        default_factory=list,
+        alias="downloadRoots",
+        description="Absolute directories from which files may be downloaded.",
+    )
+    upload_roots: list[str] = Field(
+        default_factory=list,
+        alias="uploadRoots",
+        description="Absolute directories to which files may be uploaded.",
+    )
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+
 class CredentialProxyConfig(BaseModel):
     """
     Credential Vault proxy startup settings.

@@ -17,6 +17,9 @@
 # Server-injected transport for execd lifecycle hooks; not user-settable.
 OPENSANDBOX_LIFECYCLE = "OPENSANDBOX_LIFECYCLE"
 
+# Server-injected transport for execd file-transfer policies; not user-settable.
+OPENSANDBOX_FILE_POLICY = "OPENSANDBOX_FILE_POLICY"
+
 # OSEP-0024 idle-policy bounds, shared by the API schema (pydantic Field
 # bounds) and the idle-pause integration (validation + annotation codec).
 # Defined on this leaf module because api/schema and the idle_pause package

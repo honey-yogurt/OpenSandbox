@@ -41,6 +41,7 @@ from opensandbox.models.diagnostics import DiagnosticContent
 from opensandbox.models.sandboxes import (
     CreateSnapshotRequest,
     CredentialProxyConfig,
+    FilePolicy,
     NetworkPolicy,
     NetworkRule,
     PlatformSpec,
@@ -567,6 +568,7 @@ class Sandbox:
         health_check_polling_interval: timedelta = timedelta(milliseconds=200),
         skip_health_check: bool = False,
         lifecycle: SandboxLifecycle | None = None,
+        file_policy: FilePolicy | None = None,
     ) -> "Sandbox":
         """
         Create a new sandbox instance with the specified configuration.
@@ -591,6 +593,7 @@ class Sandbox:
             health_check_polling_interval: Polling interval used while waiting for endpoint publication and readiness/health.
             skip_health_check: Skip health checks; endpoint publication is still awaited.
             lifecycle: Optional pre-start and periodic lifecycle hooks.
+            file_policy: Optional upload and download directory restrictions.
 
         Returns:
             Fully configured and ready Sandbox instance
@@ -647,6 +650,7 @@ class Sandbox:
                 snapshot_id=snapshot_id,
                 resource_requests=resource_requests,
                 lifecycle=lifecycle,
+                file_policy=file_policy,
             ),
         )
 

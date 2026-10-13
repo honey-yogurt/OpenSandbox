@@ -519,6 +519,7 @@ const config2 = new ConnectionConfig({
 | `env`                        | Environment variables                            | `{}`                         |
 | `metadata`                   | Custom metadata tags                             | `{}`                         |
 | `networkPolicy`              | Optional outbound network policy (egress)        | -                            |
+| `filePolicy`                 | Optional upload and download restrictions; see [File Policy](/guides/file-policy) | Unrestricted |
 | `credentialProxy`            | Optional Credential Vault proxy startup settings | -                            |
 | `extensions`                 | Extra server-defined fields                      | `{}`                         |
 | `skipHealthCheck`            | Skip readiness checks (`Running` + health check) | `false`                      |

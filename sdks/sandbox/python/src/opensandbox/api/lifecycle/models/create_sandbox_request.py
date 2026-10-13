@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from ..models.create_sandbox_request_extensions import CreateSandboxRequestExtensions
     from ..models.create_sandbox_request_metadata import CreateSandboxRequestMetadata
     from ..models.credential_proxy_config import CredentialProxyConfig
+    from ..models.file_policy import FilePolicy
     from ..models.image_spec import ImageSpec
     from ..models.network_policy import NetworkPolicy
     from ..models.platform_spec import PlatformSpec
@@ -58,7 +59,7 @@ class CreateSandboxRequest:
     optional; when omitted, the server creates a per-allocation task using
     `['tail', '-f', '/dev/null']`. The Pool must run task-executor and provide
     bootstrap plus execd.
-    `snapshotId`, `networkPolicy`, `platform`, `volumes`, and
+    `snapshotId`, `networkPolicy`, `filePolicy`, `platform`, `volumes`, and
     `credentialProxy.enabled` must not be provided together with `poolRef`.
 
     **Note**: API Key authentication is required via the `OPEN-SANDBOX-API-KEY` header.
@@ -74,8 +75,9 @@ class CreateSandboxRequest:
                 Mutually exclusive with `image` and `snapshotId`; in template mode
                 the workload shape is fixed by the template's golden image, so
                 `entrypoint`, `env`, `resourceLimits`, `resourceRequests`,
-                `volumes`, `platform`, `credentialProxy`, `secureAccess` and
-                lifecycle hooks are rejected (400), and `timeout` is required.
+                `volumes`, `platform`, `credentialProxy`, `secureAccess`,
+                `filePolicy`, and lifecycle hooks are rejected (400), and `timeout`
+                is required.
                 `lifecycle.idlePolicy` is allowed: it is control-plane state,
                 not workload shape.
                 The template must belong to the requester's tenant and be
@@ -131,6 +133,8 @@ class CreateSandboxRequest:
                 execd. `idlePolicy` is control-plane policy (OSEP-0024): it tells the
                 server how to treat the sandbox's state machine and never reaches the
                 guest.
+            file_policy (FilePolicy | Unset): File-transfer roots enforced by execd. Each root is an absolute path
+                inside the sandbox. An empty list denies the corresponding operation.
             entrypoint (list[str] | Unset): The command to execute as the sandbox's entry process.
 
                 Required when `image` is provided.
@@ -201,6 +205,7 @@ class CreateSandboxRequest:
     env: CreateSandboxRequestEnv | Unset = UNSET
     metadata: CreateSandboxRequestMetadata | Unset = UNSET
     lifecycle: SandboxLifecycle | Unset = UNSET
+    file_policy: FilePolicy | Unset = UNSET
     entrypoint: list[str] | Unset = UNSET
     network_policy: NetworkPolicy | Unset = UNSET
     credential_proxy: CredentialProxyConfig | Unset = UNSET
@@ -247,6 +252,10 @@ class CreateSandboxRequest:
         lifecycle: dict[str, Any] | Unset = UNSET
         if not isinstance(self.lifecycle, Unset):
             lifecycle = self.lifecycle.to_dict()
+
+        file_policy: dict[str, Any] | Unset = UNSET
+        if not isinstance(self.file_policy, Unset):
+            file_policy = self.file_policy.to_dict()
 
         entrypoint: list[str] | Unset = UNSET
         if not isinstance(self.entrypoint, Unset):
@@ -296,6 +305,8 @@ class CreateSandboxRequest:
             field_dict["metadata"] = metadata
         if lifecycle is not UNSET:
             field_dict["lifecycle"] = lifecycle
+        if file_policy is not UNSET:
+            field_dict["filePolicy"] = file_policy
         if entrypoint is not UNSET:
             field_dict["entrypoint"] = entrypoint
         if network_policy is not UNSET:
@@ -317,6 +328,7 @@ class CreateSandboxRequest:
         from ..models.create_sandbox_request_extensions import CreateSandboxRequestExtensions
         from ..models.create_sandbox_request_metadata import CreateSandboxRequestMetadata
         from ..models.credential_proxy_config import CredentialProxyConfig
+        from ..models.file_policy import FilePolicy
         from ..models.image_spec import ImageSpec
         from ..models.network_policy import NetworkPolicy
         from ..models.platform_spec import PlatformSpec
@@ -387,6 +399,13 @@ class CreateSandboxRequest:
         else:
             lifecycle = SandboxLifecycle.from_dict(_lifecycle)
 
+        _file_policy = d.pop("filePolicy", UNSET)
+        file_policy: FilePolicy | Unset
+        if isinstance(_file_policy, Unset):
+            file_policy = UNSET
+        else:
+            file_policy = FilePolicy.from_dict(_file_policy)
+
         entrypoint = cast(list[str], d.pop("entrypoint", UNSET))
 
         _network_policy = d.pop("networkPolicy", UNSET)
@@ -432,6 +451,7 @@ class CreateSandboxRequest:
             env=env,
             metadata=metadata,
             lifecycle=lifecycle,
+            file_policy=file_policy,
             entrypoint=entrypoint,
             network_policy=network_policy,
             credential_proxy=credential_proxy,

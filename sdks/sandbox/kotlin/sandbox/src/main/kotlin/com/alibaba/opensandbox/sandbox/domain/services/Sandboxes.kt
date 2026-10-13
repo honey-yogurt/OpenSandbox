@@ -18,6 +18,7 @@ package com.alibaba.opensandbox.sandbox.domain.services
 
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.CreateTemplateRequest
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.CredentialProxyConfig
+import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.FilePolicy
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.NetworkPolicy
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.PagedSandboxInfos
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.PagedSnapshotInfos
@@ -167,6 +168,54 @@ interface Sandboxes {
             "Sandbox lifecycle hooks are not supported by this Sandboxes implementation",
         )
     }
+
+    /**
+     * Creates a sandbox with optional file-transfer roots.
+     *
+     * @param filePolicy Optional upload and download directory restrictions.
+     * @throws UnsupportedOperationException if requested from an implementation that does not override this method.
+     */
+    fun createSandbox(
+        spec: SandboxImageSpec?,
+        entrypoint: List<String>?,
+        env: Map<String, String>,
+        metadata: Map<String, String>,
+        timeout: Duration?,
+        resource: Map<String, String>,
+        networkPolicy: NetworkPolicy?,
+        extensions: Map<String, String>,
+        volumes: List<Volume>?,
+        platform: PlatformSpec? = null,
+        secureAccess: Boolean = false,
+        snapshotId: String? = null,
+        credentialProxy: CredentialProxyConfig?,
+        resourceRequests: Map<String, String>? = null,
+        lifecycle: SandboxLifecycle?,
+        filePolicy: FilePolicy?,
+    ): SandboxCreateResponse =
+        if (filePolicy == null) {
+            createSandbox(
+                spec = spec,
+                entrypoint = entrypoint,
+                env = env,
+                metadata = metadata,
+                timeout = timeout,
+                resource = resource,
+                networkPolicy = networkPolicy,
+                extensions = extensions,
+                volumes = volumes,
+                platform = platform,
+                secureAccess = secureAccess,
+                snapshotId = snapshotId,
+                credentialProxy = credentialProxy,
+                resourceRequests = resourceRequests,
+                lifecycle = lifecycle,
+            )
+        } else {
+            throw UnsupportedOperationException(
+                "File policy is not supported by this Sandboxes implementation",
+            )
+        }
 
     /**
      * Creates a sandbox from a fsb golden-image template.

@@ -15,9 +15,11 @@
 package controller
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"os/exec"
 	"path/filepath"
@@ -28,10 +30,49 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/alibaba/opensandbox/execd/pkg/filepolicy"
 	"github.com/alibaba/opensandbox/execd/pkg/isolation"
 	"github.com/alibaba/opensandbox/execd/pkg/runtime"
 	"github.com/alibaba/opensandbox/execd/pkg/web/model"
+	"github.com/stretchr/testify/require"
 )
+
+func TestIsolatedSessionFilePolicyRejectsOutsideVirtualRoots(t *testing.T) {
+	filepolicy.SetForTest(&filepolicy.Config{
+		DownloadRoots: []string{"/workspace/output"},
+		UploadRoots:   []string{"/workspace/input"},
+	})
+	t.Cleanup(filepolicy.ResetForTest)
+
+	downloadCtx, downloadRec := newTestContext(
+		http.MethodGet,
+		"/session/session-1/files/download?path=/etc/passwd",
+		nil,
+	)
+	NewIsolatedSessionController(downloadCtx).DownloadFile()
+	require.Equal(t, http.StatusForbidden, downloadRec.Code)
+
+	var uploadBody bytes.Buffer
+	writer := multipart.NewWriter(&uploadBody)
+	metadata, err := writer.CreateFormFile("metadata", "metadata.json")
+	require.NoError(t, err)
+	_, err = metadata.Write([]byte(`{"path":"/etc/passwd"}`))
+	require.NoError(t, err)
+	upload, err := writer.CreateFormFile("file", "result.csv")
+	require.NoError(t, err)
+	_, err = upload.Write([]byte("secret"))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	uploadCtx, uploadRec := newTestContext(
+		http.MethodPost,
+		"/session/session-1/files/upload",
+		uploadBody.Bytes(),
+	)
+	uploadCtx.Request.Header.Set("Content-Type", writer.FormDataContentType())
+	NewIsolatedSessionController(uploadCtx).UploadFile()
+	require.Equal(t, http.StatusForbidden, uploadRec.Code)
+}
 
 func TestClassifyIsolatedCreateError_UidModeUnavailable(t *testing.T) {
 	status, code := classifyIsolatedCreateError(

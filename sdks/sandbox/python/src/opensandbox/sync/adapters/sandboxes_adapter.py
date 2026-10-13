@@ -43,6 +43,7 @@ from opensandbox.internal.readiness import constrain_readiness_request
 from opensandbox.models.sandboxes import (
     CreateSnapshotRequest,
     CredentialProxyConfig,
+    FilePolicy,
     NetworkPolicy,
     PagedSandboxInfos,
     PagedSnapshotInfos,
@@ -138,6 +139,7 @@ class SandboxesAdapterSync(SandboxesSync):
         credential_proxy: CredentialProxyConfig | None = None,
         resource_requests: dict[str, str] | None = None,
         lifecycle: SandboxLifecycle | None = None,
+        file_policy: FilePolicy | None = None,
     ) -> SandboxCreateResponse:
         logger.info(
             f"Creating sandbox with startup source: {spec.image if spec is not None else snapshot_id}"
@@ -164,6 +166,7 @@ class SandboxesAdapterSync(SandboxesSync):
                 snapshot_id=snapshot_id,
                 resource_requests=resource_requests,
                 lifecycle=lifecycle,
+                file_policy=file_policy,
             )
             response_obj = post_sandboxes.sync_detailed(
                 client=self._get_client(), body=create_request

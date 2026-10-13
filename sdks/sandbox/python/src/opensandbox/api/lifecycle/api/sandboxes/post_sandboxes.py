@@ -147,7 +147,7 @@ def sync_detailed(
             optional; when omitted, the server creates a per-allocation task using
             `['tail', '-f', '/dev/null']`. The Pool must run task-executor and provide
             bootstrap plus execd.
-            `snapshotId`, `networkPolicy`, `platform`, `volumes`, and
+            `snapshotId`, `networkPolicy`, `filePolicy`, `platform`, `volumes`, and
             `credentialProxy.enabled` must not be provided together with `poolRef`.
 
             **Note**: API Key authentication is required via the `OPEN-SANDBOX-API-KEY` header.
@@ -217,7 +217,7 @@ def sync(
             optional; when omitted, the server creates a per-allocation task using
             `['tail', '-f', '/dev/null']`. The Pool must run task-executor and provide
             bootstrap plus execd.
-            `snapshotId`, `networkPolicy`, `platform`, `volumes`, and
+            `snapshotId`, `networkPolicy`, `filePolicy`, `platform`, `volumes`, and
             `credentialProxy.enabled` must not be provided together with `poolRef`.
 
             **Note**: API Key authentication is required via the `OPEN-SANDBOX-API-KEY` header.
@@ -282,7 +282,7 @@ async def asyncio_detailed(
             optional; when omitted, the server creates a per-allocation task using
             `['tail', '-f', '/dev/null']`. The Pool must run task-executor and provide
             bootstrap plus execd.
-            `snapshotId`, `networkPolicy`, `platform`, `volumes`, and
+            `snapshotId`, `networkPolicy`, `filePolicy`, `platform`, `volumes`, and
             `credentialProxy.enabled` must not be provided together with `poolRef`.
 
             **Note**: API Key authentication is required via the `OPEN-SANDBOX-API-KEY` header.
@@ -350,7 +350,7 @@ async def asyncio(
             optional; when omitted, the server creates a per-allocation task using
             `['tail', '-f', '/dev/null']`. The Pool must run task-executor and provide
             bootstrap plus execd.
-            `snapshotId`, `networkPolicy`, `platform`, `volumes`, and
+            `snapshotId`, `networkPolicy`, `filePolicy`, `platform`, `volumes`, and
             `credentialProxy.enabled` must not be provided together with `poolRef`.
 
             **Note**: API Key authentication is required via the `OPEN-SANDBOX-API-KEY` header.

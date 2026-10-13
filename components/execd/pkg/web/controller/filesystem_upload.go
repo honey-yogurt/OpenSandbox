@@ -26,6 +26,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/alibaba/opensandbox/execd/pkg/filepolicy"
 	"github.com/alibaba/opensandbox/execd/pkg/log"
 	"github.com/alibaba/opensandbox/execd/pkg/util/pathutil"
 	"github.com/alibaba/opensandbox/execd/pkg/web/model"
@@ -152,6 +153,14 @@ func resolveUploadTarget(targetPath string, perm model.Permission) (string, *upl
 		)
 	}
 	targetDir := filepath.Dir(resolvedPath)
+	allowed, policyErr := filepolicy.AllowsUpload(resolvedPath)
+	if policyErr != nil || !allowed {
+		return "", newUploadError(
+			http.StatusForbidden,
+			model.ErrorCodeForbidden,
+			"path is outside the configured upload roots",
+		)
+	}
 	if err := MkdirAllWithOwnership(targetDir, os.ModePerm, perm.Owner, perm.Group); err != nil {
 		return "", newUploadError(
 			http.StatusInternalServerError,

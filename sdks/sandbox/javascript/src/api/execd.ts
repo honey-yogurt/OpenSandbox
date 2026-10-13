@@ -21,8 +21,7 @@
 /**
  * NOTE: The session-related path types and operations in this file (e.g. /session, runInSession)
  * are generated from the execd OpenAPI spec. They are not the recommended runtime entry point.
- * Use `sandbox.commands.createSession()`, `sandbox.commands.runInSession()`, and
- * `sandbox.commands.deleteSession()` instead.
+ * Use `sandbox.commands.createSession()`, `sandbox.commands.runInSession()`, and `sandbox.commands.deleteSession()` instead.
  */
 export interface paths {
     "/ping": {
@@ -1872,6 +1871,21 @@ export interface components {
         };
     };
     responses: {
+        /** @description Path is outside a configured file policy root */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "code": "FORBIDDEN",
+                 *       "message": "path is outside the configured upload roots"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
         /** @description Isolation subsystem is not available */
         ServiceUnavailable: {
             headers: {
@@ -2607,6 +2621,7 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
         };
     };
@@ -2672,6 +2687,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             /** @description Requested range not satisfiable */
             416: {
@@ -3180,6 +3196,7 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalServerError"];
             /** @description Filesystem execution identity requires Linux. */
             501: {
@@ -3264,6 +3281,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             /** @description Requested range not satisfiable */
             416: {
@@ -3834,6 +3852,7 @@ export interface operations {
                     "application/octet-stream": string;
                 };
             };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -3868,6 +3887,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Forbidden"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

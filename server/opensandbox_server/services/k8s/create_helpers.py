@@ -21,6 +21,7 @@ from typing import Callable, Dict, Optional
 
 from opensandbox_server.api.schema import CreateSandboxRequest
 from opensandbox_server.config import AppConfig
+from opensandbox_server.constants import OPENSANDBOX_FILE_POLICY
 from opensandbox_server.services.constants import (
     OPENSANDBOX_EGRESS_MITMPROXY_SSL_INSECURE,
     OPENSANDBOX_LIFECYCLE,
@@ -101,6 +102,11 @@ def _build_create_workload_context(
             by_alias=True,
             exclude_none=True,
             exclude={"idle_policy"},
+        )
+    if request.file_policy is not None:
+        sandbox_env[OPENSANDBOX_FILE_POLICY] = request.file_policy.model_dump_json(
+            by_alias=True,
+            exclude_none=True,
         )
 
     if credential_proxy_enabled and egress_env.get(OPENSANDBOX_EGRESS_MITMPROXY_SSL_INSECURE):

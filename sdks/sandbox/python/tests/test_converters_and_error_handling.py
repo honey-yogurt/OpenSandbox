@@ -50,6 +50,7 @@ from opensandbox.exceptions import (
 from opensandbox.models.execd import RunCommandOpts
 from opensandbox.models.sandboxes import (
     CredentialProxyConfig,
+    FilePolicy,
     LifecycleHook,
     NetworkPolicy,
     NetworkRule,
@@ -580,6 +581,10 @@ def test_sandbox_model_converter_to_api_create_request_and_renew_tz() -> None:
         extensions={},
         volumes=None,
         credential_proxy=CredentialProxyConfig(enabled=True),
+        file_policy=FilePolicy(
+            downloadRoots=["/workspace/output"],
+            uploadRoots=["/workspace/input"],
+        ),
         lifecycle=SandboxLifecycle(
             preStart=LifecycleHook(
                 command=["/opt/hooks/restore.sh"],
@@ -603,6 +608,10 @@ def test_sandbox_model_converter_to_api_create_request_and_renew_tz() -> None:
     assert d["networkPolicy"]["defaultAction"] == "deny"
     assert d["networkPolicy"]["egress"] == [{"action": "allow", "target": "pypi.org"}]
     assert d["credentialProxy"] == {"enabled": True}
+    assert d["filePolicy"] == {
+        "downloadRoots": ["/workspace/output"],
+        "uploadRoots": ["/workspace/input"],
+    }
     assert d["lifecycle"] == {
         "preStart": {
             "command": ["/opt/hooks/restore.sh"],

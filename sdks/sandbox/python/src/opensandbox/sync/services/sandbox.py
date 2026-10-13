@@ -26,6 +26,7 @@ from typing import Protocol
 from opensandbox.models.sandboxes import (
     CreateSnapshotRequest,
     CredentialProxyConfig,
+    FilePolicy,
     NetworkPolicy,
     PagedSandboxInfos,
     PagedSnapshotInfos,
@@ -74,6 +75,7 @@ class SandboxesSync(Protocol):
         credential_proxy: CredentialProxyConfig | None = None,
         resource_requests: dict[str, str] | None = None,
         lifecycle: SandboxLifecycle | None = None,
+        file_policy: FilePolicy | None = None,
     ) -> SandboxCreateResponse:
         """
         Create a new sandbox with the specified configuration (blocking).
@@ -92,6 +94,7 @@ class SandboxesSync(Protocol):
             volumes: Optional list of volumes to mount in the sandbox.
             secure_access: Whether to enable secured access for sandbox endpoints.
             lifecycle: Optional pre-start and periodic lifecycle hooks.
+            file_policy: Optional upload and download directory restrictions.
 
         Returns:
             Sandbox create response.

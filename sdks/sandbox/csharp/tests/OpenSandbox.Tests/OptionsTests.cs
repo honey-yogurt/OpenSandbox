@@ -78,6 +78,26 @@ public class OptionsTests
     }
 
     [Fact]
+    public void SandboxCreateOptions_WithFilePolicy_ShouldStorePolicy()
+    {
+        // Arrange & Act
+        var options = new SandboxCreateOptions
+        {
+            Image = "python:3.11",
+            FilePolicy = new FilePolicy
+            {
+                DownloadRoots = new[] { "/workspace/output" },
+                UploadRoots = new[] { "/workspace/input" }
+            }
+        };
+
+        // Assert
+        options.FilePolicy.Should().NotBeNull();
+        options.FilePolicy!.DownloadRoots.Should().Contain("/workspace/output");
+        options.FilePolicy.UploadRoots.Should().Contain("/workspace/input");
+    }
+
+    [Fact]
     public void SandboxCreateOptions_WithImageAuth_ShouldStoreAuth()
     {
         // Arrange & Act

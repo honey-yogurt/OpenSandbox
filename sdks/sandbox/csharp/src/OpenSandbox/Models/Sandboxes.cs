@@ -132,6 +132,24 @@ public class NetworkPolicy
 }
 
 /// <summary>
+/// File-transfer roots enforced by execd.
+/// </summary>
+public class FilePolicy
+{
+    /// <summary>
+    /// Gets or sets the absolute directories from which files may be downloaded.
+    /// </summary>
+    [JsonPropertyName("downloadRoots")]
+    public IReadOnlyList<string>? DownloadRoots { get; set; }
+
+    /// <summary>
+    /// Gets or sets the absolute directories to which files may be uploaded.
+    /// </summary>
+    [JsonPropertyName("uploadRoots")]
+    public IReadOnlyList<string>? UploadRoots { get; set; }
+}
+
+/// <summary>
 /// Credential Vault proxy startup settings.
 /// </summary>
 public class CredentialProxyConfig
@@ -903,6 +921,12 @@ public class CreateSandboxRequest
     /// </summary>
     [JsonPropertyName("networkPolicy")]
     public NetworkPolicy? NetworkPolicy { get; set; }
+
+    /// <summary>
+    /// Gets or sets optional file-transfer root restrictions.
+    /// </summary>
+    [JsonPropertyName("filePolicy")]
+    public FilePolicy? FilePolicy { get; set; }
 
     /// <summary>
     /// Gets or sets optional Credential Vault proxy startup settings.

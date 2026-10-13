@@ -36,6 +36,7 @@ from opensandbox_server.config import (
     StorageConfig,
     IngressConfig,
 )
+from opensandbox_server.constants import OPENSANDBOX_FILE_POLICY
 from opensandbox_server.extensions import ACCESS_RENEW_EXTEND_SECONDS_METADATA_KEY
 from opensandbox_server.services.constants import (
     EGRESS_MODE_ENV,
@@ -71,6 +72,7 @@ from opensandbox_server.services.helpers import (
 from opensandbox_server.api.schema import (
     CreateSandboxRequest,
     CredentialProxyConfig,
+    FilePolicy,
     Host,
     ImageSpec,
     LifecycleHook,
@@ -2360,6 +2362,26 @@ def test_build_env_injects_execd_run_as_init_when_enabled():
     _, environment = service._build_labels_and_env("sandbox-manual", request, None)
 
     assert "EXECD_INIT=1" in environment
+
+
+def test_build_env_transports_file_policy_to_execd():
+    service = DockerSandboxService(config=_app_config())
+    request = CreateSandboxRequest(
+        image=ImageSpec(uri="python:3.11"),
+        resourceLimits=ResourceLimits(root={}),
+        entrypoint=["python"],
+        filePolicy=FilePolicy(
+            downloadRoots=["/workspace/output"],
+            uploadRoots=["/workspace/input"],
+        ),
+    )
+
+    _, environment = service._build_labels_and_env("sandbox-policy", request, None)
+
+    assert (
+        f'{OPENSANDBOX_FILE_POLICY}={{"downloadRoots":["/workspace/output"],"uploadRoots":["/workspace/input"]}}'
+        in environment
+    )
 
 def test_build_labels_stores_extensions_json():
     service = DockerSandboxService(config=_app_config())

@@ -39,6 +39,7 @@ import type {
   CreateSandboxFromTemplateRequest,
   CreateSandboxRequest,
   CredentialProxyConfig,
+  FilePolicy,
   Endpoint,
   NetworkPolicy,
   NetworkRule,
@@ -162,6 +163,10 @@ export interface SandboxCreateOptions {
    * If provided without defaultAction, defaults to "deny".
    */
   networkPolicy?: NetworkPolicy;
+  /**
+   * Optional upload and download directory restrictions.
+   */
+  filePolicy?: FilePolicy;
   /**
    * Optional Credential Vault proxy startup settings.
    *
@@ -588,6 +593,7 @@ export class Sandbox {
             defaultAction: opts.networkPolicy.defaultAction ?? "deny",
           }
         : undefined,
+      filePolicy: opts.filePolicy,
       credentialProxy: opts.credentialProxy,
       volumes: opts.volumes,
       extensions: opts.extensions ?? {},

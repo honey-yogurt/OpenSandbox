@@ -73,6 +73,17 @@ export interface NetworkPolicy extends Record<string, unknown> {
   egress?: NetworkRule[];
 }
 
+export interface FilePolicy extends Record<string, unknown> {
+  /**
+   * Absolute directories from which files may be downloaded. An empty list denies downloads.
+   */
+  downloadRoots?: string[];
+  /**
+   * Absolute directories to which files may be uploaded. An empty list denies uploads.
+   */
+  uploadRoots?: string[];
+}
+
 // ============================================================================
 // Credential Vault Models
 // ============================================================================
@@ -521,6 +532,10 @@ export interface CreateSandboxRequest extends Record<string, unknown> {
    * Optional outbound network policy for the sandbox.
    */
   networkPolicy?: NetworkPolicy;
+  /**
+   * Optional upload and download directory restrictions.
+   */
+  filePolicy?: FilePolicy;
   /**
    * Optional Credential Vault proxy startup settings.
    */

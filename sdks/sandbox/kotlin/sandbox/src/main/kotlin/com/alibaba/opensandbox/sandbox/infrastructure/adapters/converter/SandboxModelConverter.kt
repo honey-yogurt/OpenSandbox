@@ -29,6 +29,7 @@ import com.alibaba.opensandbox.sandbox.api.models.RenewSandboxExpirationResponse
 import com.alibaba.opensandbox.sandbox.api.models.Snapshot
 import com.alibaba.opensandbox.sandbox.api.models.execd.Metrics
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.CredentialProxyConfig
+import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.FilePolicy
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.Host
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.NetworkPolicy
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.NetworkRule
@@ -53,6 +54,7 @@ import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.Volume
 import java.time.Duration
 import java.time.OffsetDateTime
 import com.alibaba.opensandbox.sandbox.api.models.CredentialProxyConfig as ApiCredentialProxyConfig
+import com.alibaba.opensandbox.sandbox.api.models.FilePolicy as ApiFilePolicy
 import com.alibaba.opensandbox.sandbox.api.models.Host as ApiHost
 import com.alibaba.opensandbox.sandbox.api.models.LifecycleHook as ApiLifecycleHook
 import com.alibaba.opensandbox.sandbox.api.models.NetworkPolicy as ApiNetworkPolicy
@@ -269,6 +271,7 @@ internal object SandboxModelConverter {
         snapshotId: String?,
         resourceRequests: Map<String, String>? = null,
         lifecycle: SandboxLifecycle? = null,
+        filePolicy: FilePolicy? = null,
     ): CreateSandboxRequest {
         return CreateSandboxRequest(
             image = spec?.toApiImageSpec(),
@@ -282,12 +285,19 @@ internal object SandboxModelConverter {
             resourceRequests = resourceRequests,
             platform = platform?.toApiPlatformSpec(),
             networkPolicy = networkPolicy?.toApiNetworkPolicy(),
+            filePolicy = filePolicy?.toApiFilePolicy(),
             credentialProxy = credentialProxy?.toApiCredentialProxyConfig(),
             secureAccess = secureAccess,
             extensions = extensions,
             volumes = volumes?.map { it.toApiVolume() },
         )
     }
+
+    private fun FilePolicy.toApiFilePolicy(): ApiFilePolicy =
+        ApiFilePolicy(
+            downloadRoots = downloadRoots,
+            uploadRoots = uploadRoots,
+        )
 
     private fun SandboxLifecycle.toApiSandboxLifecycle(): ApiSandboxLifecycle {
         return ApiSandboxLifecycle(

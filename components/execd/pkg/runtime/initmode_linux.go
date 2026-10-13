@@ -346,6 +346,7 @@ func bootstrapEnv() launchOption {
 var bootstrapStripEnv = []string{
 	"EXECD_ACCESS_TOKEN",
 	"OPENSANDBOX_LIFECYCLE",
+	"OPENSANDBOX_FILE_POLICY",
 	"EXECD_LIFECYCLE_CONFIG",
 	"EXECD_RUNTIME_INIT",
 }

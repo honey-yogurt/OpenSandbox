@@ -844,6 +844,8 @@ paths:
       responses:
         "200":
           description: Files uploaded successfully
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "400":
           $ref: "#/components/responses/BadRequest"
         "500":
@@ -939,6 +941,8 @@ paths:
               description: Length of the returned range
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "416":
@@ -1454,6 +1458,8 @@ paths:
           description: The requested identity could not be established or the worker failed; no fallback to Execd identity occurs.
         "200":
           description: Files uploaded successfully
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "400":
           $ref: "#/components/responses/BadRequest"
         "500":
@@ -1563,6 +1569,8 @@ paths:
               description: Length of the returned range
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "416":
@@ -2198,6 +2206,8 @@ paths:
               schema:
                 type: string
                 format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "503":
@@ -2233,6 +2243,8 @@ paths:
       responses:
         "200":
           description: File uploaded
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
@@ -3370,6 +3382,16 @@ components:
           type: string
 
   responses:
+    Forbidden:
+      description: Path is outside a configured file policy root
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: FORBIDDEN
+            message: "path is outside the configured upload roots"
+
     ServiceUnavailable:
       description: Isolation subsystem is not available
       content:

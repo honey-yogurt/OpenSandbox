@@ -36,6 +36,7 @@ from .credential_proxy_config import CredentialProxyConfig
 from .endpoint import Endpoint
 from .endpoint_headers import EndpointHeaders
 from .error_response import ErrorResponse
+from .file_policy import FilePolicy
 from .fsb_template import FsbTemplate
 from .fsb_template_env import FsbTemplateEnv
 from .fsb_template_format import FsbTemplateFormat
@@ -101,6 +102,7 @@ __all__ = (
     "Endpoint",
     "EndpointHeaders",
     "ErrorResponse",
+    "FilePolicy",
     "FsbTemplate",
     "FsbTemplateEnv",
     "FsbTemplateFormat",

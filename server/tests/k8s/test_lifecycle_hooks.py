@@ -16,11 +16,13 @@ import json
 from datetime import datetime, timezone
 
 from opensandbox_server.api.schema import (
+    FilePolicy,
     IdlePolicy,
     LifecycleHook,
     PeriodicLifecycleHook,
     SandboxLifecycle,
 )
+from opensandbox_server.constants import OPENSANDBOX_FILE_POLICY
 from opensandbox_server.services.constants import OPENSANDBOX_LIFECYCLE
 from opensandbox_server.services.k8s.create_helpers import (
     _build_create_workload_context,
@@ -68,6 +70,32 @@ def test_create_context_transports_lifecycle_as_reserved_execd_env(
                 "command": ["/opt/hooks/checkpoint.sh"],
             }
         ],
+    }
+
+
+def test_create_context_transports_file_policy_as_reserved_execd_env(
+    k8s_app_config,
+    create_sandbox_request,
+):
+    create_sandbox_request.env = {"USER_ENV": "value"}
+    create_sandbox_request.file_policy = FilePolicy(
+        download_roots=["/workspace/output"],
+        upload_roots=["/workspace/input"],
+    )
+
+    context = _build_create_workload_context(
+        k8s_app_config,
+        create_sandbox_request,
+        "sandbox-1",
+        datetime.now(timezone.utc),
+        lambda: "egress-token",
+        lambda: "secure-token",
+    )
+
+    assert context.sandbox_env["USER_ENV"] == "value"
+    assert json.loads(context.sandbox_env[OPENSANDBOX_FILE_POLICY]) == {
+        "downloadRoots": ["/workspace/output"],
+        "uploadRoots": ["/workspace/input"],
     }
 
 

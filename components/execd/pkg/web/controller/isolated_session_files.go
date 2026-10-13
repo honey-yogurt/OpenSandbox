@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/alibaba/opensandbox/execd/pkg/filepolicy"
 	"github.com/alibaba/opensandbox/execd/pkg/log"
 	"github.com/alibaba/opensandbox/execd/pkg/runtime"
 	"github.com/alibaba/opensandbox/execd/pkg/vfs"
@@ -123,17 +124,25 @@ func (c *IsolatedSessionController) SearchFiles() {
 }
 
 func (c *IsolatedSessionController) DownloadFile() {
-	mv, release, _ := c.getMergedView()
-	if mv == nil {
-		return
-	}
-	defer release()
-
 	filePath := c.ctx.Query("path")
 	if filePath == "" {
 		c.RespondError(http.StatusBadRequest, model.ErrorCodeMissingQuery, "path is required")
 		return
 	}
+	if !filepolicy.AllowsVirtualDownload(filePath) {
+		c.RespondError(
+			http.StatusForbidden,
+			model.ErrorCodeForbidden,
+			"path is outside the configured download roots",
+		)
+		return
+	}
+
+	mv, release, _ := c.getMergedView()
+	if mv == nil {
+		return
+	}
+	defer release()
 
 	rawOffset := c.ctx.Query("offset")
 	rawLimit := c.ctx.Query("limit")
@@ -245,18 +254,14 @@ func (c *IsolatedSessionController) serveIsolatedLineRange(file *os.File, rawOff
 }
 
 func (c *IsolatedSessionController) UploadFile() {
-	mv, release, _ := c.getMergedView()
-	if mv == nil {
-		return
-	}
-	defer release()
-
 	metadataParts, fileParts, uerr := parseUploadForm(c.ctx)
 	if uerr != nil {
 		c.RespondError(uerr.status, uerr.code, uerr.message)
 		return
 	}
 
+	metadatas := make([]*model.FileMetadata, len(metadataParts))
+	filePaths := make([]string, len(metadataParts))
 	for i := range metadataParts {
 		meta, uerr := parseUploadMetadata(metadataParts[i])
 		if uerr != nil {
@@ -264,14 +269,33 @@ func (c *IsolatedSessionController) UploadFile() {
 			return
 		}
 
+		filePath := filepath.Clean(meta.Path)
+		if !filepolicy.AllowsVirtualUpload(filePath) {
+			c.RespondError(
+				http.StatusForbidden,
+				model.ErrorCodeForbidden,
+				"path is outside the configured upload roots",
+			)
+			return
+		}
+		metadatas[i] = meta
+		filePaths[i] = filePath
+	}
+
+	mv, release, _ := c.getMergedView()
+	if mv == nil {
+		return
+	}
+	defer release()
+
+	for i := range metadataParts {
 		file, err := fileParts[i].Open()
 		if err != nil {
 			c.RespondError(http.StatusBadRequest, model.ErrorCodeInvalidFile, err.Error())
 			return
 		}
 
-		filePath := filepath.Clean(meta.Path)
-		dir := filepath.Dir(filePath)
+		dir := filepath.Dir(filePaths[i])
 		if dir != "." && dir != "/" {
 			if err := mv.MkdirAll(dir, 0o755); err != nil {
 				log.Warn("isolated upload: mkdir %s: %v", dir, err)
@@ -279,14 +303,14 @@ func (c *IsolatedSessionController) UploadFile() {
 		}
 
 		perm := os.FileMode(0o644)
-		if meta.Permission.Mode != 0 {
-			mode, convErr := strconv.ParseUint(strconv.Itoa(meta.Permission.Mode), 8, 32)
+		if metadatas[i].Permission.Mode != 0 {
+			mode, convErr := strconv.ParseUint(strconv.Itoa(metadatas[i].Permission.Mode), 8, 32)
 			if convErr == nil {
 				perm = os.FileMode(mode)
 			}
 		}
 
-		if _, err := mv.WriteFileReader(filePath, file, perm); err != nil {
+		if _, err := mv.WriteFileReader(filePaths[i], file, perm); err != nil {
 			file.Close()
 			c.RespondError(http.StatusInternalServerError, model.ErrorCodeRuntimeError, err.Error())
 			return

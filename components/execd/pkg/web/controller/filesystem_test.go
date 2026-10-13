@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/alibaba/opensandbox/execd/pkg/filepolicy"
 	"github.com/alibaba/opensandbox/execd/pkg/web/model"
 	"github.com/stretchr/testify/require"
 )
@@ -451,6 +452,98 @@ func TestDownloadFileContentDispositionParsesForQuotedFilename(t *testing.T) {
 	_, params, err := mime.ParseMediaType(rec.Header().Get("Content-Disposition"))
 	require.NoError(t, err)
 	require.Equal(t, `a"b.txt`, params["filename"])
+}
+
+func TestDownloadFilePolicyRejectsOutsideRoot(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "allowed")
+	outside := filepath.Join(base, "secret.txt")
+	require.NoError(t, os.Mkdir(root, 0o755))
+	require.NoError(t, os.WriteFile(outside, []byte("secret"), 0o600))
+	filepolicy.SetForTest(&filepolicy.Config{DownloadRoots: []string{root}})
+	t.Cleanup(filepolicy.ResetForTest)
+
+	query := fmt.Sprintf("/files/download?path=%s", url.QueryEscape(outside))
+	ctrl, rec := newFilesystemController(t, http.MethodGet, query, nil)
+
+	ctrl.DownloadFile()
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	var resp model.ErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, model.ErrorCodeForbidden, resp.Code)
+}
+
+func TestDownloadFilePolicyRejectsSymlinkEscape(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "allowed")
+	outside := filepath.Join(base, "secret.txt")
+	require.NoError(t, os.Mkdir(root, 0o755))
+	require.NoError(t, os.WriteFile(outside, []byte("secret"), 0o600))
+	link := filepath.Join(root, "escape.txt")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	filepolicy.SetForTest(&filepolicy.Config{DownloadRoots: []string{root}})
+	t.Cleanup(filepolicy.ResetForTest)
+
+	query := fmt.Sprintf("/files/download?path=%s", url.QueryEscape(link))
+	ctrl, rec := newFilesystemController(t, http.MethodGet, query, nil)
+
+	ctrl.DownloadFile()
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestDownloadFilePolicyLegacyModeAllowsOutsideRoot(t *testing.T) {
+	filepolicy.ResetForTest()
+	t.Cleanup(filepolicy.ResetForTest)
+	target := filepath.Join(t.TempDir(), "legacy.txt")
+	require.NoError(t, os.WriteFile(target, []byte("legacy"), 0o600))
+
+	query := fmt.Sprintf("/files/download?path=%s", url.QueryEscape(target))
+	ctrl, rec := newFilesystemController(t, http.MethodGet, query, nil)
+
+	ctrl.DownloadFile()
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "legacy", rec.Body.String())
+}
+
+func TestUploadFilePolicyRejectsOutsideRoot(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "allowed")
+	require.NoError(t, os.Mkdir(root, 0o755))
+	filepolicy.SetForTest(&filepolicy.Config{UploadRoots: []string{root}})
+	t.Cleanup(filepolicy.ResetForTest)
+
+	path, uerr := resolveUploadTarget(filepath.Join(base, "secret.txt"), model.Permission{})
+
+	require.Empty(t, path)
+	require.NotNil(t, uerr)
+	require.Equal(t, http.StatusForbidden, uerr.status)
+	require.Equal(t, model.ErrorCodeForbidden, uerr.code)
+}
+
+func TestUploadFilePolicyRejectsSymlinkEscape(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "allowed")
+	outside := filepath.Join(base, "outside")
+	require.NoError(t, os.Mkdir(root, 0o755))
+	require.NoError(t, os.Mkdir(outside, 0o755))
+	link := filepath.Join(root, "escape")
+	if err := os.Symlink(filepath.Join(outside, "result.csv"), link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	filepolicy.SetForTest(&filepolicy.Config{UploadRoots: []string{root}})
+	t.Cleanup(filepolicy.ResetForTest)
+
+	path, uerr := resolveUploadTarget(link, model.Permission{})
+
+	require.Empty(t, path)
+	require.NotNil(t, uerr)
+	require.Equal(t, http.StatusForbidden, uerr.status)
+	require.Equal(t, model.ErrorCodeForbidden, uerr.code)
 }
 
 func writeTestFileWithLines(t *testing.T, lines []string) string {

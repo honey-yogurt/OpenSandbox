@@ -60,6 +60,9 @@ type SandboxCreateOptions struct {
 	// NetworkPolicy for egress control.
 	NetworkPolicy *NetworkPolicy
 
+	// FilePolicy restricts file uploads and downloads.
+	FilePolicy *FilePolicy
+
 	// CredentialProxy enables Credential Vault transparent proxy support.
 	CredentialProxy *CredentialProxyConfig
 
@@ -177,6 +180,7 @@ func CreateSandbox(ctx context.Context, config ConnectionConfig, opts SandboxCre
 		Metadata:         opts.Metadata,
 		Lifecycle:        opts.Lifecycle,
 		NetworkPolicy:    opts.NetworkPolicy,
+		FilePolicy:       opts.FilePolicy,
 		CredentialProxy:  opts.CredentialProxy,
 		Volumes:          opts.Volumes,
 		Extensions:       opts.Extensions,

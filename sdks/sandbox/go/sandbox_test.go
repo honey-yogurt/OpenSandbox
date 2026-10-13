@@ -28,6 +28,7 @@ import (
 func TestCreateSandbox_ForwardsLifecycle(t *testing.T) {
 	timeout := 300
 	var received *SandboxLifecycle
+	var receivedFilePolicy *FilePolicy
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -35,6 +36,7 @@ func TestCreateSandbox_ForwardsLifecycle(t *testing.T) {
 			var request CreateSandboxRequest
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
 			received = request.Lifecycle
+			receivedFilePolicy = request.FilePolicy
 			jsonResponse(w, http.StatusCreated, SandboxInfo{
 				ID:        "sbx-lifecycle",
 				Status:    SandboxStatus{State: StateRunning},
@@ -60,6 +62,10 @@ func TestCreateSandbox_ForwardsLifecycle(t *testing.T) {
 	}, SandboxCreateOptions{
 		Image:           "python:3.12",
 		SkipHealthCheck: true,
+		FilePolicy: &FilePolicy{
+			DownloadRoots: []string{"/workspace/output"},
+			UploadRoots:   []string{"/workspace/input"},
+		},
 		Lifecycle: &SandboxLifecycle{
 			PreStart: &LifecycleHook{
 				Command:        []string{"/opt/hooks/restore.sh"},
@@ -74,6 +80,9 @@ func TestCreateSandbox_ForwardsLifecycle(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, received)
+	require.NotNil(t, receivedFilePolicy)
+	require.Equal(t, []string{"/workspace/output"}, receivedFilePolicy.DownloadRoots)
+	require.Equal(t, []string{"/workspace/input"}, receivedFilePolicy.UploadRoots)
 	require.NotNil(t, received.PreStart)
 	require.Equal(t, []string{"/opt/hooks/restore.sh"}, received.PreStart.Command)
 	require.NotNil(t, received.PreStart.TimeoutSeconds)

@@ -353,6 +353,43 @@ class NetworkPolicy private constructor(
     }
 }
 
+/**
+ * File-transfer roots enforced by execd.
+ *
+ * @property downloadRoots Absolute directories from which files may be downloaded
+ * @property uploadRoots Absolute directories to which files may be uploaded
+ */
+class FilePolicy private constructor(
+    val downloadRoots: List<String>?,
+    val uploadRoots: List<String>?,
+) {
+    companion object {
+        @JvmStatic
+        fun builder(): Builder = Builder()
+    }
+
+    class Builder {
+        private var downloadRoots: List<String>? = null
+        private var uploadRoots: List<String>? = null
+
+        fun downloadRoots(roots: List<String>): Builder {
+            this.downloadRoots = roots
+            return this
+        }
+
+        fun uploadRoots(roots: List<String>): Builder {
+            this.uploadRoots = roots
+            return this
+        }
+
+        fun build(): FilePolicy =
+            FilePolicy(
+                downloadRoots = downloadRoots,
+                uploadRoots = uploadRoots,
+            )
+    }
+}
+
 // ============================================================================
 // Volume Models
 // ============================================================================

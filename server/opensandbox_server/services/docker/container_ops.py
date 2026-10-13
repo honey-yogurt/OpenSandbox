@@ -38,6 +38,7 @@ from opensandbox_server.api.schema import (
     CreateSandboxRequest,
     PlatformSpec,
 )
+from opensandbox_server.constants import OPENSANDBOX_FILE_POLICY
 from opensandbox_server.services.constants import (
     SANDBOX_EXPIRES_AT_LABEL,
     SANDBOX_ID_LABEL,
@@ -311,6 +312,10 @@ class DockerContainerOpsMixin:
         if self.app_config and self.app_config.runtime.execd_run_as_init:
             environment.append("EXECD_INIT=1")
         environment.append(f"OPENSANDBOX_ID={sandbox_id}")
+        if request.file_policy is not None:
+            environment.append(
+                f"{OPENSANDBOX_FILE_POLICY}={request.file_policy.model_dump_json(by_alias=True, exclude_none=True)}"
+            )
         return labels, environment
 
     def _resolve_image_auth(

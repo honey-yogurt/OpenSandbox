@@ -53,6 +53,9 @@ func (c *FilesystemController) DownloadFile() {
 		)
 		return
 	}
+	if !c.ensureDownloadAllowed(resolvedFilePath) {
+		return
+	}
 
 	rawOffset := c.ctx.Query("offset")
 	rawLimit := c.ctx.Query("limit")

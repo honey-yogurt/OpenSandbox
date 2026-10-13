@@ -557,6 +557,7 @@ var sandbox = await Sandbox.CreateAsync(new SandboxCreateOptions
 | `Env` | Environment variables | `{}` |
 | `Metadata` | Custom metadata tags | `{}` |
 | `NetworkPolicy` | Optional outbound network policy (egress) | - |
+| `FilePolicy` | Optional upload and download restrictions; see [File Policy](/guides/file-policy) | Unrestricted |
 | `CredentialProxy` | Optional Credential Vault proxy startup settings | - |
 | `Volumes` | Optional storage mounts (`Host` / `PVC` / `OSSFS`, supports `ReadOnly` and `SubPath`) | - |
 | `Extensions` | Extra server-defined fields | `{}` |

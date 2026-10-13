@@ -591,6 +591,7 @@ The `Sandbox.builder()` allows configuring the sandbox environment.
 | `metadata`     | Custom metadata tags                     | Empty                           |
 | `extensions`   | Opaque server-side extension parameters  | Empty                           |
 | `networkPolicy` | Optional outbound network policy (egress) | -                             |
+| `filePolicy` | Optional upload and download restrictions; see [File Policy](/guides/file-policy) | Unrestricted |
 | `credentialProxy` | Optional Credential Vault proxy startup settings | -                     |
 | `readyTimeout` | Max time to wait for sandbox to be ready | 30 seconds                      |
 | `snapshotId` | Restore a snapshot instead of an image | - |

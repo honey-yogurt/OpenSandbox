@@ -662,6 +662,7 @@ The `Sandbox.create()` allows configuring the sandbox environment.
 | `env`           | Environment variables                    | Empty                           |
 | `metadata`      | Custom metadata tags                     | Empty                           |
 | `network_policy` | Optional outbound network policy (egress) | -                             |
+| `file_policy` | Optional upload and download directory restrictions; see [File Policy](/guides/file-policy) | Unrestricted |
 | `credential_proxy` | Optional Credential Vault proxy startup settings | -                     |
 | `ready_timeout` | Total budget for endpoint publication and health checks | 30 seconds                      |
 | `snapshot_id` | Restore a snapshot instead of passing `image` | - |

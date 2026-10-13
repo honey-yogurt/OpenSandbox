@@ -22,13 +22,14 @@ for request/response validation and serialization.
 from datetime import datetime
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, PrivateAttr, RootModel, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, RootModel, field_validator, model_validator
 
 from opensandbox_server.constants import (
     IDLE_TIMEOUT_MAX_SECONDS,
     IDLE_TIMEOUT_MIN_SECONDS,
     PROBE_TIMEOUT_MAX_SECONDS,
     PROBE_TIMEOUT_MIN_SECONDS,
+    OPENSANDBOX_FILE_POLICY,
 )
 from opensandbox_server.constants import OPENSANDBOX_LIFECYCLE
 
@@ -125,6 +126,35 @@ class NetworkPolicy(BaseModel):
 
     class Config:
         populate_by_name = True
+
+
+class FilePolicy(BaseModel):
+    """
+    Roots within which execd permits upload and download transfers.
+    """
+
+    download_roots: List[str] = Field(
+        default_factory=list,
+        alias="downloadRoots",
+        description="Absolute directory roots allowed for file downloads. An empty list denies downloads.",
+    )
+    upload_roots: List[str] = Field(
+        default_factory=list,
+        alias="uploadRoots",
+        description="Absolute directory roots allowed for file uploads. An empty list denies uploads.",
+    )
+
+    @field_validator("download_roots", "upload_roots")
+    @classmethod
+    def validate_roots(cls, roots: List[str]) -> List[str]:
+        for root in roots:
+            if not root.startswith("/") or "\x00" in root:
+                raise ValueError("file policy roots must be non-empty absolute sandbox paths")
+        return roots
+
+    class Config:
+        populate_by_name = True
+        extra = "forbid"
 
 
 class CredentialProxyConfig(BaseModel):
@@ -615,6 +645,14 @@ class CreateSandboxRequest(BaseModel):
         None,
         description="Optional declarative lifecycle hooks executed by execd.",
     )
+    file_policy: Optional[FilePolicy] = Field(
+        None,
+        alias="filePolicy",
+        description=(
+            "Optional roots restricting execd file uploads and downloads. "
+            "When omitted, transfers retain legacy unrestricted behavior."
+        ),
+    )
     entrypoint: Optional[List[str]] = Field(
         None,
         min_length=1,
@@ -684,6 +722,11 @@ class CreateSandboxRequest(BaseModel):
                 f"Environment variable '{OPENSANDBOX_LIFECYCLE}' is reserved. "
                 "Use the lifecycle request field instead."
             )
+        if self.env and OPENSANDBOX_FILE_POLICY in self.env:
+            raise ValueError(
+                f"Environment variable '{OPENSANDBOX_FILE_POLICY}' is reserved. "
+                "Use the filePolicy request field instead."
+            )
 
         # Template mode (fsb): workload-shaping fields are rejected, not
         # ignored; idlePolicy is control-plane state, so a hooks-free
@@ -700,6 +743,7 @@ class CreateSandboxRequest(BaseModel):
                 "platform": self.platform is not None,
                 "credentialProxy": self.credential_proxy is not None,
                 "secureAccess": self.secure_access,
+                "filePolicy": self.file_policy is not None,
                 "lifecycle": self.lifecycle is not None and self.lifecycle.has_hooks,
             }
             present = [name for name, is_set in conflicts.items() if is_set]
@@ -727,6 +771,8 @@ class CreateSandboxRequest(BaseModel):
             # Reject conflicting fields that would be ignored in pool mode
             if bool((self.snapshot_id or "").strip()):
                 raise ValueError("snapshotId cannot be used together with poolRef.")
+            if self.file_policy is not None:
+                raise ValueError("filePolicy cannot be used together with poolRef.")
             # Normalize blank snapshotId so downstream code won't see
             # a truthy whitespace string (e.g. "   ") as a real value.
             if self.snapshot_id is not None and not self.snapshot_id.strip():

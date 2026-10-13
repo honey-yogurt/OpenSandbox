@@ -19,6 +19,7 @@ from opensandbox_server.api.schema import (
     CreateSandboxRequest,
     CreateSnapshotRequest,
     CredentialProxyConfig,
+    FilePolicy,
     Host,
     ImageSpec,
     ListSnapshotsRequest,
@@ -36,7 +37,7 @@ from opensandbox_server.api.schema import (
     SnapshotStatus,
     Volume,
 )
-from opensandbox_server.constants import OPENSANDBOX_LIFECYCLE
+from opensandbox_server.constants import OPENSANDBOX_FILE_POLICY, OPENSANDBOX_LIFECYCLE
 
 
 class TestSandboxLifecycle:
@@ -77,6 +78,45 @@ class TestSandboxLifecycle:
                 entrypoint=["python"],
                 resourceLimits=ResourceLimits(root={}),
                 env={OPENSANDBOX_LIFECYCLE: "{}"},
+            )
+
+    def test_create_request_parses_file_policy_aliases(self):
+        request = CreateSandboxRequest.model_validate(
+            {
+                "image": {"uri": "python:3.11"},
+                "entrypoint": ["python"],
+                "resourceLimits": {},
+                "filePolicy": {
+                    "downloadRoots": ["/workspace/output"],
+                    "uploadRoots": ["/workspace/input"],
+                },
+            }
+        )
+
+        assert request.file_policy == FilePolicy(
+            download_roots=["/workspace/output"],
+            upload_roots=["/workspace/input"],
+        )
+
+    @pytest.mark.parametrize("root", ["workspace/output", "", "relative"])
+    def test_create_request_rejects_relative_file_policy_root(self, root):
+        with pytest.raises(ValidationError, match="absolute sandbox paths"):
+            FilePolicy.model_validate({"downloadRoots": [root]})
+
+    def test_create_request_rejects_reserved_file_policy_env(self):
+        with pytest.raises(ValidationError, match="is reserved"):
+            CreateSandboxRequest(
+                image=ImageSpec(uri="python:3.11"),
+                entrypoint=["python"],
+                resourceLimits=ResourceLimits(root={}),
+                env={OPENSANDBOX_FILE_POLICY: "{}"},
+            )
+
+    def test_create_request_rejects_file_policy_with_pool_ref(self):
+        with pytest.raises(ValidationError, match="filePolicy cannot be used together with poolRef"):
+            CreateSandboxRequest(
+                extensions={"poolRef": "default/pool"},
+                filePolicy=FilePolicy(download_roots=["/workspace/output"]),
             )
 
     def test_create_request_rejects_lifecycle_with_pool_ref(self):

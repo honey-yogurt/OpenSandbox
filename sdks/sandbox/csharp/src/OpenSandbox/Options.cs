@@ -81,6 +81,11 @@ public class SandboxCreateOptions
     public NetworkPolicy? NetworkPolicy { get; set; }
 
     /// <summary>
+    /// Gets or sets the file-transfer root restrictions for the sandbox.
+    /// </summary>
+    public FilePolicy? FilePolicy { get; set; }
+
+    /// <summary>
     /// Gets or sets optional Credential Vault proxy startup settings.
     /// </summary>
     public CredentialProxyConfig? CredentialProxy { get; set; }

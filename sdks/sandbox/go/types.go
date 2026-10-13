@@ -141,6 +141,12 @@ type NetworkRule struct {
 	Target string `json:"target"`
 }
 
+// FilePolicy restricts sandbox file uploads and downloads to explicit roots.
+type FilePolicy struct {
+	DownloadRoots []string `json:"downloadRoots,omitempty"`
+	UploadRoots   []string `json:"uploadRoots,omitempty"`
+}
+
 // CredentialProxyConfig enables Credential Vault transparent proxy support at
 // sandbox startup.
 type CredentialProxyConfig struct {
@@ -186,6 +192,7 @@ type CreateSandboxRequest struct {
 	Lifecycle        *SandboxLifecycle      `json:"lifecycle,omitempty"`
 	Entrypoint       []string               `json:"entrypoint,omitempty"`
 	NetworkPolicy    *NetworkPolicy         `json:"networkPolicy,omitempty"`
+	FilePolicy       *FilePolicy            `json:"filePolicy,omitempty"`
 	CredentialProxy  *CredentialProxyConfig `json:"credentialProxy,omitempty"`
 	Volumes          []Volume               `json:"volumes,omitempty"`
 	Extensions       map[string]string      `json:"extensions,omitempty"`

@@ -32,6 +32,7 @@ import (
 
 	"github.com/alibaba/opensandbox/execd/pkg/clone3compat"
 	"github.com/alibaba/opensandbox/execd/pkg/ebpf"
+	"github.com/alibaba/opensandbox/execd/pkg/filepolicy"
 	"github.com/alibaba/opensandbox/execd/pkg/flag"
 	"github.com/alibaba/opensandbox/execd/pkg/isolation"
 	"github.com/alibaba/opensandbox/execd/pkg/lifecycle"
@@ -98,6 +99,11 @@ func run() int {
 	}
 	_ = os.Unsetenv(lifecycle.ConfigEnv)
 	_ = os.Unsetenv(lifecycle.ConfigPathEnv)
+
+	if err := filepolicy.LoadFromEnv(); err != nil {
+		log.Error("file policy: %v", err)
+		return 1
+	}
 
 	// Start the eBPF observation layer ([ebpf] enabled, OSEP-0018 §5).
 	// The stub build reports disabled; the execd-ebpf variant attaches the

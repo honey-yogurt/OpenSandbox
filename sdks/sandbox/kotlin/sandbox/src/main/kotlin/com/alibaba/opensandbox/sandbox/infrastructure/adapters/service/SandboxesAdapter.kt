@@ -31,6 +31,7 @@ import com.alibaba.opensandbox.sandbox.api.infrastructure.Success
 import com.alibaba.opensandbox.sandbox.api.models.Endpoint
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.CreateTemplateRequest
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.CredentialProxyConfig
+import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.FilePolicy
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.NetworkPolicy
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.PagedSandboxInfos
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.PagedSnapshotInfos
@@ -186,6 +187,43 @@ internal class SandboxesAdapter(
         credentialProxy: CredentialProxyConfig?,
         resourceRequests: Map<String, String>?,
         lifecycle: SandboxLifecycle?,
+    ): SandboxCreateResponse =
+        createSandbox(
+            spec = spec,
+            entrypoint = entrypoint,
+            env = env,
+            metadata = metadata,
+            timeout = timeout,
+            resource = resource,
+            networkPolicy = networkPolicy,
+            extensions = extensions,
+            volumes = volumes,
+            platform = platform,
+            secureAccess = secureAccess,
+            snapshotId = snapshotId,
+            credentialProxy = credentialProxy,
+            resourceRequests = resourceRequests,
+            lifecycle = lifecycle,
+            filePolicy = null,
+        )
+
+    override fun createSandbox(
+        spec: SandboxImageSpec?,
+        entrypoint: List<String>?,
+        env: Map<String, String>,
+        metadata: Map<String, String>,
+        timeout: Duration?,
+        resource: Map<String, String>,
+        networkPolicy: NetworkPolicy?,
+        extensions: Map<String, String>,
+        volumes: List<Volume>?,
+        platform: PlatformSpec?,
+        secureAccess: Boolean,
+        snapshotId: String?,
+        credentialProxy: CredentialProxyConfig?,
+        resourceRequests: Map<String, String>?,
+        lifecycle: SandboxLifecycle?,
+        filePolicy: FilePolicy?,
     ): SandboxCreateResponse {
         logger.info("Creating sandbox with startup source: {}", spec?.image ?: snapshotId)
 
@@ -207,6 +245,7 @@ internal class SandboxesAdapter(
                     snapshotId = snapshotId,
                     resourceRequests = resourceRequests,
                     lifecycle = lifecycle,
+                    filePolicy = filePolicy,
                 )
             val apiResponse = api.sandboxesPost(createRequest)
             val response = apiResponse.toSandboxCreateResponse()

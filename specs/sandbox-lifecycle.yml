@@ -405,6 +405,18 @@ paths:
                     memory: "512Mi"
                   entrypoint: ["python", "/app/main.py"]
                   secureAccess: true
+              file-policy:
+                summary: Restrict uploads and downloads to explicit directories
+                value:
+                  image:
+                    uri: python:3.11
+                  resourceLimits:
+                    cpu: "500m"
+                    memory: "512Mi"
+                  entrypoint: ["python", "/app/main.py"]
+                  filePolicy:
+                    downloadRoots: ["/workspace/output"]
+                    uploadRoots: ["/workspace/input"]
               restore-snapshot:
                 summary: Restore from a snapshot
                 value:
@@ -1833,7 +1845,7 @@ components:
         optional; when omitted, the server creates a per-allocation task using
         `['tail', '-f', '/dev/null']`. The Pool must run task-executor and provide
         bootstrap plus execd.
-        `snapshotId`, `networkPolicy`, `platform`, `volumes`, and
+        `snapshotId`, `networkPolicy`, `filePolicy`, `platform`, `volumes`, and
         `credentialProxy.enabled` must not be provided together with `poolRef`.
 
         **Note**: API Key authentication is required via the `OPEN-SANDBOX-API-KEY` header.
@@ -1859,8 +1871,9 @@ components:
             Mutually exclusive with `image` and `snapshotId`; in template mode
             the workload shape is fixed by the template's golden image, so
             `entrypoint`, `env`, `resourceLimits`, `resourceRequests`,
-            `volumes`, `platform`, `credentialProxy`, `secureAccess` and
-            lifecycle hooks are rejected (400), and `timeout` is required.
+            `volumes`, `platform`, `credentialProxy`, `secureAccess`,
+            `filePolicy`, and lifecycle hooks are rejected (400), and `timeout`
+            is required.
             `lifecycle.idlePolicy` is allowed: it is control-plane state,
             not workload shape.
             The template must belong to the requester's tenant and be
@@ -1943,6 +1956,15 @@ components:
             lifecycle hook transport reject hooks. `lifecycle.idlePolicy` is
             not a hook and may accompany `extensions.poolRef`; it is honored
             only by the fast-sandbox backend and rejected by others.
+
+        filePolicy:
+          $ref: '#/components/schemas/FilePolicy'
+          description: |
+            Optional roots that restrict execd upload and download operations.
+            Paths are resolved and checked after symlink resolution; requests
+            outside the configured roots return 403. Omitted or null retains
+            legacy unrestricted transfer behavior for backward compatibility.
+            Not supported together with `extensions.poolRef` or `templateId`.
 
         entrypoint:
           type: array
@@ -2147,6 +2169,28 @@ components:
           description: List of egress rules evaluated in order.
           items:
             $ref: '#/components/schemas/NetworkRule'
+      additionalProperties: false
+
+    FilePolicy:
+      type: object
+      description: |
+        File-transfer roots enforced by execd. Each root is an absolute path
+        inside the sandbox. An empty list denies the corresponding operation.
+      properties:
+        downloadRoots:
+          type: array
+          description: Absolute directories from which files may be downloaded.
+          items:
+            type: string
+            pattern: "^/.*"
+          example: ["/workspace/output"]
+        uploadRoots:
+          type: array
+          description: Absolute directories to which files may be uploaded.
+          items:
+            type: string
+            pattern: "^/.*"
+          example: ["/workspace/input"]
       additionalProperties: false
 
     CredentialProxyConfig:

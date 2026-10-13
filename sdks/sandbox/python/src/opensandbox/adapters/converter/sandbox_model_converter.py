@@ -50,6 +50,7 @@ from opensandbox.api.lifecycle.types import Unset
 from opensandbox.models.sandboxes import (
     CreateSnapshotRequest,
     CredentialProxyConfig,
+    FilePolicy,
     NetworkPolicy,
     NetworkRule,
     PagedSandboxInfos,
@@ -189,6 +190,7 @@ class SandboxModelConverter:
         credential_proxy: CredentialProxyConfig | None = None,
         resource_requests: dict[str, str] | None = None,
         lifecycle: SandboxLifecycle | None = None,
+        file_policy: FilePolicy | None = None,
     ) -> CreateSandboxRequest:
         """Convert domain parameters to API CreateSandboxRequest."""
         from opensandbox.api.lifecycle.models.create_sandbox_request import (
@@ -205,6 +207,9 @@ class SandboxModelConverter:
         )
         from opensandbox.api.lifecycle.models.credential_proxy_config import (
             CredentialProxyConfig as ApiCredentialProxyConfig,
+        )
+        from opensandbox.api.lifecycle.models.file_policy import (
+            FilePolicy as ApiFilePolicy,
         )
         from opensandbox.api.lifecycle.models.platform_spec import (
             PlatformSpec as ApiPlatformSpec,
@@ -231,6 +236,17 @@ class SandboxModelConverter:
         api_network_policy = SandboxModelConverter.to_api_network_policy(
             network_policy
         )
+
+        api_file_policy = UNSET
+        if file_policy is not None:
+            if not isinstance(file_policy, FilePolicy):
+                raise TypeError(
+                    "file_policy must be a FilePolicy or None, "
+                    f"got {type(file_policy).__name__}"
+                )
+            api_file_policy = ApiFilePolicy.from_dict(
+                file_policy.model_dump(by_alias=True, exclude_none=True)
+            )
 
         api_credential_proxy = UNSET
         if credential_proxy is not None:
@@ -308,6 +324,7 @@ class SandboxModelConverter:
             extensions=api_extensions,
             volumes=api_volumes,
             secure_access=secure_access,
+            file_policy=api_file_policy,
         )
         if timeout is None:
             # Preserve an explicit manual-cleanup request as JSON null.

@@ -20,6 +20,7 @@ import com.alibaba.opensandbox.sandbox.HttpClientProvider
 import com.alibaba.opensandbox.sandbox.config.ConnectionConfig
 import com.alibaba.opensandbox.sandbox.domain.exceptions.SandboxApiException
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.CredentialProxyConfig
+import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.FilePolicy
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.LifecycleHook
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.NetworkPolicy
 import com.alibaba.opensandbox.sandbox.domain.models.sandboxes.NetworkRule
@@ -140,6 +141,11 @@ class SandboxesAdapterTest {
                                 .build(),
                         )
                         .build(),
+                filePolicy =
+                    FilePolicy.builder()
+                        .downloadRoots(listOf("/workspace/output"))
+                        .uploadRoots(listOf("/workspace/input"))
+                        .build(),
             )
 
         // Verify request
@@ -180,6 +186,16 @@ class SandboxesAdapterTest {
         val gotCredentialProxy = payload["credentialProxy"]?.jsonObject
         assertNotNull(gotCredentialProxy, "credentialProxy should be present in createSandbox request")
         assertEquals("true", gotCredentialProxy!!["enabled"]!!.jsonPrimitive.content)
+        val gotFilePolicy = payload["filePolicy"]?.jsonObject
+        assertNotNull(gotFilePolicy, "filePolicy should be present in createSandbox request")
+        assertEquals(
+            "/workspace/output",
+            gotFilePolicy!!["downloadRoots"]!!.jsonArray[0].jsonPrimitive.content,
+        )
+        assertEquals(
+            "/workspace/input",
+            gotFilePolicy["uploadRoots"]!!.jsonArray[0].jsonPrimitive.content,
+        )
         assertEquals("true", payload["secureAccess"]!!.jsonPrimitive.content)
 
         // Verify response

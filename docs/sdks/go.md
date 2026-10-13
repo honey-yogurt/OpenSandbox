@@ -286,6 +286,16 @@ if err := sandbox.DeleteFiles(ctx, []string{"/tmp/demo.txt"}); err != nil {
 }
 ```
 
+Set `FilePolicy` in `SandboxCreateOptions` to restrict upload and download
+directories. See [File Policy](/guides/file-policy) for the complete behavior.
+
+```go
+FilePolicy: &opensandbox.FilePolicy{
+    DownloadRoots: []string{"/workspace/output"},
+    UploadRoots:   []string{"/workspace/input"},
+},
+```
+
 The same upload/download methods support binary files. Pass a Range header such
 as `"bytes=0-1023"` to `DownloadFile` for a partial download.
 

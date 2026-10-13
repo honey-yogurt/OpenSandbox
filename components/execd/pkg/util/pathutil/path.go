@@ -15,8 +15,11 @@
 package pathutil
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -25,6 +28,82 @@ import (
 )
 
 var envVarPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
+
+// IsPathWithinRoot reports whether path, after symlink resolution, is equal to
+// root or located below it. Missing path components are resolved against the
+// nearest existing ancestor so upload targets may not yet exist.
+func IsPathWithinRoot(path, root string) (bool, error) {
+	absolutePath, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return false, fmt.Errorf("resolve path: %w", err)
+	}
+	absoluteRoot, err := filepath.Abs(filepath.Clean(root))
+	if err != nil {
+		return false, fmt.Errorf("resolve root: %w", err)
+	}
+
+	resolvedPath, err := resolveSymlinkPath(absolutePath)
+	if err != nil {
+		return false, fmt.Errorf("resolve symlinks in %s: %w", path, err)
+	}
+	resolvedRoot, err := resolveSymlinkPath(absoluteRoot)
+	if err != nil {
+		return false, fmt.Errorf("resolve symlinks in %s: %w", root, err)
+	}
+
+	relativePath, err := filepath.Rel(resolvedRoot, resolvedPath)
+	if err != nil {
+		return false, fmt.Errorf("compare path with root: %w", err)
+	}
+	return relativePath == "." || (relativePath != ".." && !startsWithParentTraversal(relativePath)), nil
+}
+
+func resolveSymlinkPath(path string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err == nil {
+		return resolved, nil
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+
+	if link, readErr := os.Readlink(path); readErr == nil {
+		target := link
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(path), target)
+		}
+		return resolveSymlinkPath(target)
+	}
+
+	parent, err := resolveSymlinkPath(filepath.Dir(path))
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(parent, filepath.Base(path)), nil
+}
+
+func startsWithParentTraversal(path string) bool {
+	return len(path) >= 3 && path[:3] == ".."+string(filepath.Separator)
+}
+
+// IsVirtualPathWithinRoot performs the same prefix check for paths that are
+// not backed directly by the daemon filesystem, such as isolated-session
+// overlay paths. Such paths must be absolute so they cannot be reinterpreted
+// against an unknown relative base.
+func IsVirtualPathWithinRoot(path, root string) bool {
+	cleanedPath := pathpkg.Clean(path)
+	cleanedRoot := pathpkg.Clean(root)
+	if !strings.HasPrefix(cleanedPath, "/") || !strings.HasPrefix(cleanedRoot, "/") {
+		return false
+	}
+	if cleanedPath == cleanedRoot {
+		return true
+	}
+	if cleanedRoot == "/" {
+		return true
+	}
+	return strings.HasPrefix(cleanedPath, cleanedRoot+"/")
+}
 
 func envMapFromProcessAndOverrides(envOverrides map[string]string) map[string]string {
 	out := make(map[string]string, len(envOverrides)+16)

@@ -19,6 +19,7 @@ type ErrorCode string
 const (
 	ErrorCodeInvalidRequest      ErrorCode = "INVALID_REQUEST_BODY"
 	ErrorCodeMissingQuery        ErrorCode = "MISSING_QUERY"
+	ErrorCodeForbidden           ErrorCode = "FORBIDDEN"
 	ErrorCodeRuntimeError        ErrorCode = "RUNTIME_ERROR"
 	ErrorCodeInvalidFile         ErrorCode = "INVALID_FILE"
 	ErrorCodeInvalidFileContent  ErrorCode = "INVALID_FILE_CONTENT"

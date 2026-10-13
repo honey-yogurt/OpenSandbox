@@ -153,6 +153,27 @@ test("Sandbox.create forwards credentialProxy", async () => {
   assert.deepEqual(recordedRequests[0].credentialProxy, { enabled: true });
 });
 
+test("Sandbox.create forwards filePolicy", async () => {
+  const { adapterFactory, recordedRequests } = createAdapterFactory();
+
+  await Sandbox.create({
+    adapterFactory,
+    connectionConfig: { domain: "http://127.0.0.1:8080" },
+    image: "python:3.12",
+    filePolicy: {
+      downloadRoots: ["/workspace/output"],
+      uploadRoots: ["/workspace/input"],
+    },
+    skipHealthCheck: true,
+  });
+
+  assert.equal(recordedRequests.length, 1);
+  assert.deepEqual(recordedRequests[0].filePolicy, {
+    downloadRoots: ["/workspace/output"],
+    uploadRoots: ["/workspace/input"],
+  });
+});
+
 test("Sandbox.create forwards lifecycle hooks", async () => {
   const { adapterFactory, recordedRequests } = createAdapterFactory();
   const lifecycle = {
