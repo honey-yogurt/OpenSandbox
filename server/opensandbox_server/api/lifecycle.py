@@ -53,6 +53,11 @@ from opensandbox_server.services.constants import (
     SandboxErrorCodes,
 )
 from opensandbox_server.services.factory import create_sandbox_service
+from opensandbox_server.services.idempotency import (
+    IdempotencyConflictError,
+    IdempotencyKeyError,
+    IdempotencyService,
+)
 from opensandbox_server.services.snapshot_restore import resolve_sandbox_image_from_request
 from opensandbox_server.services.snapshot_service import create_snapshot_service
 
@@ -60,6 +65,7 @@ router = APIRouter(tags=["Sandboxes"])
 
 sandbox_service = create_sandbox_service()
 snapshot_service = create_snapshot_service(sandbox_service)
+idempotency_service = IdempotencyService()
 # React to snapshot status changes so rows converge without waiting on reads
 snapshot_service.start_background_sync()
 
@@ -94,7 +100,15 @@ snapshot_service.start_background_sync()
 )
 async def create_sandbox(
     request: CreateSandboxRequest,
+    http_request: Request,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID", description="Unique request identifier for tracing"),
+    idempotency_key: Optional[str] = Header(
+        None,
+        alias="Idempotency-Key",
+        description="Client-supplied key that makes create retries idempotent (maximum 255 characters)",
+        min_length=1,
+        max_length=255,
+    ),
 ) -> CreateSandboxResponse:
     """
     Create a sandbox from a container image.
@@ -113,6 +127,44 @@ async def create_sandbox(
     Raises:
         HTTPException: If sandbox creation scheduling fails
     """
+    if not idempotency_key:
+        idempotency_key = http_request.headers.get("Idempotency-Key")
+    if not idempotency_key:
+        return await _create_sandbox_once(request)
+
+    tenant = getattr(http_request.state, "tenant", None)
+    scope = tenant.name if tenant is not None else "default"
+
+    async def create_once() -> CreateSandboxResponse:
+        return await _create_sandbox_once(request)
+
+    try:
+        return await idempotency_service.create(
+            key=idempotency_key,
+            scope=scope,
+            request=request,
+            create=create_once,
+            exists=sandbox_service.get_sandbox,
+        )
+    except IdempotencyKeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": SandboxErrorCodes.INVALID_PARAMETER,
+                "message": str(exc),
+            },
+        ) from exc
+    except IdempotencyConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": SandboxErrorCodes.IDEMPOTENCY_KEY_CONFLICT,
+                "message": str(exc),
+            },
+        ) from exc
+
+
+async def _create_sandbox_once(request: CreateSandboxRequest) -> CreateSandboxResponse:
     validate_extensions(request.extensions)
     # Resolve snapshotId before backend routing: the owning backend recorded
     # on the snapshot row selects the fsb vs pod backend for restores.
@@ -276,7 +328,9 @@ def delete_sandbox(
     Raises:
         HTTPException: If sandbox not found or deletion fails
     """
-    return sandbox_service.delete_sandbox(sandbox_id)
+    response = sandbox_service.delete_sandbox(sandbox_id)
+    idempotency_service.release_sandbox(sandbox_id)
+    return response
 
 
 # ============================================================================

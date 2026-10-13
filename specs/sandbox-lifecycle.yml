@@ -345,6 +345,19 @@ paths:
 
         API Key authentication is required via:
         - `OPEN-SANDBOX-API-KEY: <api-key>` header
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: |
+            Makes create retries idempotent. Reusing a key with the same request
+            body returns the same sandbox, while reusing it with a different body
+            returns `409 Conflict`. A key can create a new sandbox after its
+            sandbox has been destroyed. Keys are scoped to the authenticated tenant.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
       requestBody:
         required: true
         content:
