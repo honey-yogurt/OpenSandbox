@@ -36,7 +36,7 @@ Defines the complete lifecycle interfaces for creating, managing, and destroying
 - `POST /sandboxes` - Create a sandbox from an image, snapshot, or template with timeout and resource limits
 - `GET /sandboxes` - List sandboxes with state/metadata filters and pagination
 - `GET /sandboxes/{sandboxId}` - Get full sandbox details (including startup source and entrypoint)
-- `DELETE /sandboxes/{sandboxId}` - Delete a sandbox
+- `DELETE /sandboxes/{sandboxId}` - Delete a sandbox and return `deletionConfirmed` plus `deletedAt`
 - `POST /sandboxes/{sandboxId}/snapshots` - Create a snapshot from a sandbox
 - `GET /snapshots` - List snapshots with optional source sandbox, exact name, and state filtering plus pagination
 - `GET /snapshots/{snapshotId}` - Get snapshot state and metadata

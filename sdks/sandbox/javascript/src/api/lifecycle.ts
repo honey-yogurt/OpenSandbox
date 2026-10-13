@@ -1,11 +1,11 @@
 // Copyright 2026 The OpenSandbox Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -446,7 +446,12 @@ export interface paths {
         post?: never;
         /**
          * Delete a sandbox
-         * @description Delete a sandbox, terminating its execution. The sandbox will transition through Stopping state to Terminated.
+         * @description Delete a sandbox, terminating its execution.
+         *
+         *     Kubernetes-backed sandboxes wait up to 60 seconds for the workload,
+         *     Pod, and server-managed PVCs to disappear before returning. When
+         *     confirmation times out, the response contains `deletionConfirmed: false`
+         *     and clients should retry deletion or investigate cleanup manually.
          */
         delete: {
             parameters: {
@@ -461,16 +466,20 @@ export interface paths {
             requestBody?: never;
             responses: {
                 /**
-                 * @description Sandbox successfully deleted.
+                 * @description Sandbox deletion acknowledgement.
                  *
-                 *     Sandbox has been scheduled for termination and will transition to Stopping state, then Terminated.
+                 *     `deletionConfirmed` is true when runtime deletion was observed.
+                 *     It is false when deletion was requested but resource cleanup was
+                 *     still in progress after the timeout.
                  */
-                204: {
+                200: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestId"];
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["DeleteSandboxResponse"];
+                    };
                 };
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
@@ -1007,6 +1016,19 @@ export interface components {
              *     this is restored from the snapshot.
              */
             entrypoint: string[];
+        };
+        /** @description Deletion acknowledgement with runtime cleanup confirmation. */
+        DeleteSandboxResponse: {
+            /**
+             * @description Whether the runtime confirmed that the workload, Pod, and
+             *     server-managed PVCs were removed before the deletion timeout.
+             */
+            deletionConfirmed: boolean;
+            /**
+             * Format: date-time
+             * @description Timestamp of the deletion acknowledgement.
+             */
+            deletedAt: string;
         };
         /** @description Optional settings for creating a sandbox snapshot. */
         CreateSnapshotRequest: {

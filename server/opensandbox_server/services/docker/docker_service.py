@@ -46,6 +46,7 @@ from opensandbox_server.extensions import (
 from opensandbox_server.api.schema import (
     CreateSandboxRequest,
     CreateSandboxResponse,
+    DeleteSandboxResponse,
     ImageSpec,
     ListSandboxesRequest,
     ListSandboxesResponse,
@@ -1111,7 +1112,7 @@ class DockerSandboxService(DockerDiagnosticsMixin, DockerRuntimeMixin, DockerVol
         container = self._get_container_by_sandbox_id(sandbox_id)
         return self._container_to_sandbox(container, sandbox_id)
 
-    def delete_sandbox(self, sandbox_id: str) -> None:
+    def delete_sandbox(self, sandbox_id: str) -> DeleteSandboxResponse:
         try:
             container = self._get_container_by_sandbox_id(sandbox_id)
         except HTTPException as exc:
@@ -1153,6 +1154,10 @@ class DockerSandboxService(DockerDiagnosticsMixin, DockerRuntimeMixin, DockerVol
         self._release_ossfs_mounts(mount_keys)
         self._cleanup_managed_volumes(sandbox_id, managed_volumes)
         self._metadata_store.delete(sandbox_id)
+        return DeleteSandboxResponse(
+            deletionConfirmed=True,
+            deletedAt=datetime.now(timezone.utc),
+        )
 
     def pause_sandbox(self, sandbox_id: str) -> None:
         container = self._get_container_by_sandbox_id(sandbox_id)

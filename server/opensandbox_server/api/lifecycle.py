@@ -30,6 +30,7 @@ from opensandbox_server.api.schema import (
     CreateSnapshotRequest,
     CreateSandboxRequest,
     CreateSandboxResponse,
+    DeleteSandboxResponse,
     Endpoint,
     ErrorResponse,
     ListSnapshotsRequest,
@@ -244,9 +245,11 @@ def patch_sandbox_metadata(
 
 @router.delete(
     "/sandboxes/{sandbox_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=DeleteSandboxResponse,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_200_OK,
     responses={
-        204: {"description": "Sandbox successfully deleted"},
+        200: {"model": DeleteSandboxResponse, "description": "Sandbox deletion acknowledgement"},
         401: {"model": ErrorResponse, "description": "Authentication credentials are missing or invalid"},
         403: {"model": ErrorResponse, "description": "The authenticated user lacks permission for this operation"},
         404: {"model": ErrorResponse, "description": "The requested resource does not exist"},
@@ -257,7 +260,7 @@ def patch_sandbox_metadata(
 def delete_sandbox(
     sandbox_id: str,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID", description="Unique request identifier for tracing"),
-) -> Response:
+) -> DeleteSandboxResponse:
     """
     Delete a sandbox.
 
@@ -268,13 +271,12 @@ def delete_sandbox(
         x_request_id: Unique request identifier for tracing (optional; server generates if omitted).
 
     Returns:
-        Response: 204 No Content
+        DeleteSandboxResponse: Deletion acknowledgement and confirmation result
 
     Raises:
         HTTPException: If sandbox not found or deletion fails
     """
-    sandbox_service.delete_sandbox(sandbox_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return sandbox_service.delete_sandbox(sandbox_id)
 
 
 # ============================================================================

@@ -33,6 +33,7 @@ from .create_sandbox_response_extensions import CreateSandboxResponseExtensions
 from .create_sandbox_response_metadata import CreateSandboxResponseMetadata
 from .create_snapshot_request import CreateSnapshotRequest
 from .credential_proxy_config import CredentialProxyConfig
+from .delete_sandbox_response import DeleteSandboxResponse
 from .endpoint import Endpoint
 from .endpoint_headers import EndpointHeaders
 from .error_response import ErrorResponse
@@ -99,6 +100,7 @@ __all__ = (
     "CreateSandboxResponseMetadata",
     "CreateSnapshotRequest",
     "CredentialProxyConfig",
+    "DeleteSandboxResponse",
     "Endpoint",
     "EndpointHeaders",
     "ErrorResponse",

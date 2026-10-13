@@ -1123,6 +1123,7 @@ spec:
             plural="batchsandboxes",
             name="test-id",
             grace_period_seconds=0,
+            wait=False,
         )
 
     def test_delete_workload_raises_when_not_found(self, mock_k8s_client):

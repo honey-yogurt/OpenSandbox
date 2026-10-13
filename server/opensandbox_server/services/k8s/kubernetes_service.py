@@ -38,6 +38,7 @@ from opensandbox_server.extensions.keys import ACCESS_RENEW_EXTEND_SECONDS_METAD
 from opensandbox_server.api.schema import (
     CreateSandboxRequest,
     CreateSandboxResponse,
+    DeleteSandboxResponse,
     Endpoint,
     ListSandboxesRequest,
     ListSandboxesResponse,
@@ -123,6 +124,8 @@ logger = logging.getLogger(__name__)
 # permission; that is a deployment property no retry fixes within a window
 # this short, so back off flat (not exponential) and say so once per window.
 _CLUSTER_LOOKUP_FORBIDDEN_BACKOFF_SECONDS = 600.0
+_K8S_DELETION_CONFIRMATION_TIMEOUT_SECONDS = 60.0
+_K8S_DELETION_POLL_INTERVAL_SECONDS = 0.5
 
 
 def _is_namespace_not_found(exc: Exception) -> bool:
@@ -1366,17 +1369,19 @@ class KubernetesSandboxService(K8sDiagnosticsMixin, SandboxService, ExtensionSer
                 },
             ) from e
     
-    def delete_sandbox(self, sandbox_id: str) -> None:
+    def delete_sandbox(self, sandbox_id: str) -> DeleteSandboxResponse:
         ns = self._resolve_namespace()
+        wait_started_at = time.monotonic()
         if get_current_tenant() is not None:
             # Ownership 404 must not enter the handler below: that path treats
             # 404 as "workload gone" and sweeps still-live managed PVCs.
             _get_owned_workload_or_404(self.workload_provider, ns, sandbox_id)
         try:
-            _delete_workload_or_404(
+            workload_deleted = _delete_workload_or_404(
                 self.workload_provider,
                 ns,
                 sandbox_id,
+                wait=True,
             )
             logger.info(f"Deleted sandbox: {sandbox_id}")
         except HTTPException as e:
@@ -1390,7 +1395,21 @@ class KubernetesSandboxService(K8sDiagnosticsMixin, SandboxService, ExtensionSer
             logger.error(f"Error deleting sandbox {sandbox_id}: {e}")
             raise _build_k8s_api_error("delete sandbox", e) from e
 
-        self._cleanup_managed_pvcs(sandbox_id)
+        deletion_confirmed = False
+        if workload_deleted:
+            self._cleanup_managed_pvcs(sandbox_id)
+            deletion_confirmed = self._wait_for_deletion_confirmation(
+                sandbox_id,
+                deadline=wait_started_at + _K8S_DELETION_CONFIRMATION_TIMEOUT_SECONDS,
+            )
+        else:
+            logger.warning(
+                f"sandbox={sandbox_id} | workload was still present after deletion wait"
+            )
+        return DeleteSandboxResponse(
+            deletionConfirmed=deletion_confirmed,
+            deletedAt=datetime.now(timezone.utc),
+        )
 
     def _cleanup_managed_pvcs(self, sandbox_id: str) -> None:
         """
@@ -1454,6 +1473,38 @@ class KubernetesSandboxService(K8sDiagnosticsMixin, SandboxService, ExtensionSer
                 logger.warning(
                     f"sandbox={sandbox_id} | failed to delete managed PVC '{name}': {e}"
                 )
+
+    def _wait_for_deletion_confirmation(self, sandbox_id: str, deadline: float) -> bool:
+        while True:
+            if self._deletion_observed(sandbox_id):
+                return True
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                logger.warning(
+                    f"sandbox={sandbox_id} | deletion was not confirmed within "
+                    f"{_K8S_DELETION_CONFIRMATION_TIMEOUT_SECONDS}s"
+                )
+                return False
+            time.sleep(min(_K8S_DELETION_POLL_INTERVAL_SECONDS, remaining))
+
+    def _deletion_observed(self, sandbox_id: str) -> bool:
+        namespace = self._resolve_namespace()
+        managed_pvc_selector = (
+            f"{SANDBOX_MANAGED_VOLUMES_LABEL}=server,"
+            f"{SANDBOX_ID_LABEL}={sandbox_id}"
+        )
+        try:
+            if self.workload_provider.get_workload(sandbox_id=sandbox_id, namespace=namespace):
+                return False
+            if self.k8s_client.list_pods(namespace, label_selector=f"{SANDBOX_ID_LABEL}={sandbox_id}"):
+                return False
+            return not self.k8s_client.list_pvcs(
+                namespace,
+                label_selector=managed_pvc_selector,
+            )
+        except Exception as exc:
+            logger.warning(f"sandbox={sandbox_id} | failed to confirm deletion: {exc}")
+            return False
     
     def pause_sandbox(self, sandbox_id: str) -> None:
         try:

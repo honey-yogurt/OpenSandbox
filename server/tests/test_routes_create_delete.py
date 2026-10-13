@@ -17,7 +17,12 @@ from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 
 from opensandbox_server.api import lifecycle
-from opensandbox_server.api.schema import CreateSandboxRequest, CreateSandboxResponse, SandboxStatus
+from opensandbox_server.api.schema import (
+    CreateSandboxRequest,
+    CreateSandboxResponse,
+    DeleteSandboxResponse,
+    SandboxStatus,
+)
 
 
 def test_create_sandbox_openapi_describes_synchronous_provisioning(
@@ -218,24 +223,29 @@ def test_create_sandbox_accepts_snapshot_id_with_entrypoint(
     assert calls[0].entrypoint == ["python", "app.py"]
 
 
-def test_delete_sandbox_returns_204_and_calls_service(
+def test_delete_sandbox_returns_confirmation_and_calls_service(
     client: TestClient,
     auth_headers: dict,
     monkeypatch,
 ) -> None:
     calls: list[str] = []
+    deleted_at = datetime.now(timezone.utc)
 
     class StubService:
         @staticmethod
-        def delete_sandbox(sandbox_id: str) -> None:
+        def delete_sandbox(sandbox_id: str) -> DeleteSandboxResponse:
             calls.append(sandbox_id)
+            return DeleteSandboxResponse(deletion_confirmed=True, deleted_at=deleted_at)
 
     monkeypatch.setattr(lifecycle, "sandbox_service", StubService())
 
     response = client.delete("/v1/sandboxes/sbx-001", headers=auth_headers)
 
-    assert response.status_code == 204
-    assert response.text == ""
+    assert response.status_code == 200
+    assert response.json() == {
+        "deletionConfirmed": True,
+        "deletedAt": deleted_at.isoformat().replace("+00:00", "Z"),
+    }
     assert calls == ["sbx-001"]
 
 

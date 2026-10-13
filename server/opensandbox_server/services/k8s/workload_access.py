@@ -75,11 +75,13 @@ def _delete_workload_or_404(
     workload_provider: Any,
     namespace: str,
     sandbox_id: str,
-) -> None:
+    wait: bool = False,
+) -> bool:
     try:
-        workload_provider.delete_workload(
+        return workload_provider.delete_workload(
             sandbox_id=sandbox_id,
             namespace=namespace,
+            wait=wait,
         )
     except Exception as exc:
         if _is_not_found_error(exc):

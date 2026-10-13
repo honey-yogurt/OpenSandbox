@@ -19,6 +19,7 @@ from fastapi import HTTPException
 from opensandbox_server.api.schema import (
     CreateSandboxRequest,
     CreateSandboxResponse,
+    DeleteSandboxResponse,
     Endpoint,
     ListSandboxesRequest,
     ListSandboxesResponse,
@@ -96,8 +97,8 @@ class CompositeSandboxService(SandboxService, ExtensionService):
     ) -> Sandbox:
         return self._backend(sandbox_id).patch_sandbox_metadata(sandbox_id, patch)
 
-    def delete_sandbox(self, sandbox_id: str) -> None:
-        self._backend(sandbox_id).delete_sandbox(sandbox_id)
+    def delete_sandbox(self, sandbox_id: str) -> DeleteSandboxResponse:
+        return self._backend(sandbox_id).delete_sandbox(sandbox_id)
 
     def pause_sandbox(self, sandbox_id: str) -> None:
         self._backend(sandbox_id).pause_sandbox(sandbox_id)

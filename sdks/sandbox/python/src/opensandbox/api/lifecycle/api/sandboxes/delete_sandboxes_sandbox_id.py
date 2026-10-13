@@ -15,13 +15,14 @@
 #
 
 from http import HTTPStatus
-from typing import Any, cast
+from typing import Any
 from urllib.parse import quote
 
 import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.delete_sandbox_response import DeleteSandboxResponse
 from ...models.error_response import ErrorResponse
 from ...types import Response
 
@@ -39,10 +40,13 @@ def _get_kwargs(
     return _kwargs
 
 
-def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Any | ErrorResponse | None:
-    if response.status_code == 204:
-        response_204 = cast(Any, None)
-        return response_204
+def _parse_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> DeleteSandboxResponse | ErrorResponse | None:
+    if response.status_code == 200:
+        response_200 = DeleteSandboxResponse.from_dict(response.json())
+
+        return response_200
 
     if response.status_code == 401:
         response_401 = ErrorResponse.from_dict(response.json())
@@ -75,7 +79,9 @@ def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Res
         return None
 
 
-def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[Any | ErrorResponse]:
+def _build_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[DeleteSandboxResponse | ErrorResponse]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -88,11 +94,15 @@ def sync_detailed(
     sandbox_id: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Response[Any | ErrorResponse]:
+) -> Response[DeleteSandboxResponse | ErrorResponse]:
     """Delete a sandbox
 
-     Delete a sandbox, terminating its execution. The sandbox will transition through Stopping state to
-    Terminated.
+     Delete a sandbox, terminating its execution.
+
+    Kubernetes-backed sandboxes wait up to 60 seconds for the workload,
+    Pod, and server-managed PVCs to disappear before returning. When
+    confirmation times out, the response contains `deletionConfirmed: false`
+    and clients should retry deletion or investigate cleanup manually.
 
     Args:
         sandbox_id (str):
@@ -102,7 +112,7 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | ErrorResponse]
+        Response[DeleteSandboxResponse | ErrorResponse]
     """
 
     kwargs = _get_kwargs(
@@ -120,11 +130,15 @@ def sync(
     sandbox_id: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Any | ErrorResponse | None:
+) -> DeleteSandboxResponse | ErrorResponse | None:
     """Delete a sandbox
 
-     Delete a sandbox, terminating its execution. The sandbox will transition through Stopping state to
-    Terminated.
+     Delete a sandbox, terminating its execution.
+
+    Kubernetes-backed sandboxes wait up to 60 seconds for the workload,
+    Pod, and server-managed PVCs to disappear before returning. When
+    confirmation times out, the response contains `deletionConfirmed: false`
+    and clients should retry deletion or investigate cleanup manually.
 
     Args:
         sandbox_id (str):
@@ -134,7 +148,7 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | ErrorResponse
+        DeleteSandboxResponse | ErrorResponse
     """
 
     return sync_detailed(
@@ -147,11 +161,15 @@ async def asyncio_detailed(
     sandbox_id: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Response[Any | ErrorResponse]:
+) -> Response[DeleteSandboxResponse | ErrorResponse]:
     """Delete a sandbox
 
-     Delete a sandbox, terminating its execution. The sandbox will transition through Stopping state to
-    Terminated.
+     Delete a sandbox, terminating its execution.
+
+    Kubernetes-backed sandboxes wait up to 60 seconds for the workload,
+    Pod, and server-managed PVCs to disappear before returning. When
+    confirmation times out, the response contains `deletionConfirmed: false`
+    and clients should retry deletion or investigate cleanup manually.
 
     Args:
         sandbox_id (str):
@@ -161,7 +179,7 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | ErrorResponse]
+        Response[DeleteSandboxResponse | ErrorResponse]
     """
 
     kwargs = _get_kwargs(
@@ -177,11 +195,15 @@ async def asyncio(
     sandbox_id: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Any | ErrorResponse | None:
+) -> DeleteSandboxResponse | ErrorResponse | None:
     """Delete a sandbox
 
-     Delete a sandbox, terminating its execution. The sandbox will transition through Stopping state to
-    Terminated.
+     Delete a sandbox, terminating its execution.
+
+    Kubernetes-backed sandboxes wait up to 60 seconds for the workload,
+    Pod, and server-managed PVCs to disappear before returning. When
+    confirmation times out, the response contains `deletionConfirmed: false`
+    and clients should retry deletion or investigate cleanup manually.
 
     Args:
         sandbox_id (str):
@@ -191,7 +213,7 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | ErrorResponse
+        DeleteSandboxResponse | ErrorResponse
     """
 
     return (

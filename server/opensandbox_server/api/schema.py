@@ -844,6 +844,24 @@ class CreateSandboxResponse(BaseModel):
         populate_by_name = True
 
 
+class DeleteSandboxResponse(BaseModel):
+    """Confirmation returned after requesting sandbox deletion."""
+
+    deletion_confirmed: bool = Field(
+        ...,
+        alias="deletionConfirmed",
+        description="Whether workload, Pod, and managed PVC cleanup were observed before the timeout",
+    )
+    deleted_at: datetime = Field(
+        ...,
+        alias="deletedAt",
+        description="Deletion acknowledgement timestamp in UTC",
+    )
+
+    class Config:
+        populate_by_name = True
+
+
 class AllocationSummary(BaseModel):
     """Current runtime-confirmed pool allocation summary."""
     mode: Literal["pool"] = Field("pool", description="Allocation mode.")

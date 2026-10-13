@@ -27,6 +27,7 @@ from uuid import uuid4
 from opensandbox_server.api.schema import (
     CreateSandboxRequest,
     CreateSandboxResponse,
+    DeleteSandboxResponse,
     Endpoint,
     ListSandboxesRequest,
     ListSandboxesResponse,
@@ -155,7 +156,7 @@ class SandboxService(ABC):
         pass
 
     @abstractmethod
-    def delete_sandbox(self, sandbox_id: str) -> None:
+    def delete_sandbox(self, sandbox_id: str) -> DeleteSandboxResponse:
         """
         Delete a sandbox.
 

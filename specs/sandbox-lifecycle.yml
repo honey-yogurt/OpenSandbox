@@ -672,13 +672,25 @@ paths:
     delete:
       tags: [Sandboxes]
       summary: Delete a sandbox
-      description: Delete a sandbox, terminating its execution. The sandbox will transition through Stopping state to Terminated.
-      responses:
-        '204':
-          description: |
-            Sandbox successfully deleted.
+      description: |
+        Delete a sandbox, terminating its execution.
 
-            Sandbox has been scheduled for termination and will transition to Stopping state, then Terminated.
+        Kubernetes-backed sandboxes wait up to 60 seconds for the workload,
+        Pod, and server-managed PVCs to disappear before returning. When
+        confirmation times out, the response contains `deletionConfirmed: false`
+        and clients should retry deletion or investigate cleanup manually.
+      responses:
+        '200':
+          description: |
+            Sandbox deletion acknowledgement.
+
+            `deletionConfirmed` is true when runtime deletion was observed.
+            It is false when deletion was requested but resource cleanup was
+            still in progress after the timeout.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteSandboxResponse'
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
@@ -1360,6 +1372,22 @@ components:
         - status
         - createdAt
         - entrypoint
+
+    DeleteSandboxResponse:
+      type: object
+      description: Deletion acknowledgement with runtime cleanup confirmation.
+      properties:
+        deletionConfirmed:
+          type: boolean
+          description: |
+            Whether the runtime confirmed that the workload, Pod, and
+            server-managed PVCs were removed before the deletion timeout.
+        deletedAt:
+          type: string
+          format: date-time
+          description: Timestamp of the deletion acknowledgement.
+      required: [deletionConfirmed, deletedAt]
+      additionalProperties: false
 
     CreateSnapshotRequest:
       type: object

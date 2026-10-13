@@ -584,18 +584,19 @@ class BatchSandboxProvider(WorkloadProvider):
 
         return None
     
-    def delete_workload(self, sandbox_id: str, namespace: str) -> None:
+    def delete_workload(self, sandbox_id: str, namespace: str, wait: bool = False) -> bool:
         batchsandbox = self.get_workload(sandbox_id, namespace)
         if not batchsandbox:
             raise Exception(f"BatchSandbox for sandbox {sandbox_id} not found")
 
-        self.k8s_client.delete_custom_object(
+        return self.k8s_client.delete_custom_object(
             group=self.group,
             version=self.version,
             namespace=namespace,
             plural=self.plural,
             name=batchsandbox["metadata"]["name"],
             grace_period_seconds=0,
+            wait=wait,
         )
 
     def list_workloads(self, namespace: str, label_selector: str) -> List[Dict[str, Any]]:

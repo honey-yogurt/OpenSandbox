@@ -390,19 +390,20 @@ class AgentSandboxProvider(WorkloadProvider):
 
         return None
 
-    def delete_workload(self, sandbox_id: str, namespace: str) -> None:
+    def delete_workload(self, sandbox_id: str, namespace: str, wait: bool = False) -> bool:
         """Delete the Sandbox CRD for the given sandbox ID."""
         sandbox = self.get_workload(sandbox_id, namespace)
         if not sandbox:
             raise Exception(f"Sandbox for sandbox {sandbox_id} not found")
 
-        self.k8s_client.delete_custom_object(
+        return self.k8s_client.delete_custom_object(
             group=self.group,
             version=self.version,
             namespace=namespace,
             plural=self.plural,
             name=sandbox["metadata"]["name"],
             grace_period_seconds=0,
+            wait=wait,
         )
 
     def list_workloads(self, namespace: str, label_selector: str) -> List[Dict[str, Any]]:

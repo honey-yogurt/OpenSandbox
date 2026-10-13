@@ -1586,15 +1586,25 @@ class TestGetSandbox:
 
 class TestDeleteSandbox:
     
+    def _observe_complete_deletion(self, k8s_service):
+        k8s_service.workload_provider.get_workload.return_value = None
+        k8s_service.k8s_client.list_pods.return_value = []
+        k8s_service.k8s_client.list_pvcs.return_value = []
+
     def test_delete_existing_sandbox_succeeds(self, k8s_service, mock_workload):
         k8s_service.workload_provider.get_workload.return_value = mock_workload
-        k8s_service.workload_provider.delete_workload.return_value = None
+        k8s_service.workload_provider.delete_workload.return_value = True
+        self._observe_complete_deletion(k8s_service)
 
-        k8s_service.delete_sandbox("test-sandbox-id")
+        response = k8s_service.delete_sandbox("test-sandbox-id")
+
+        assert response.deletion_confirmed is True
+        assert response.deleted_at is not None
         
         k8s_service.workload_provider.delete_workload.assert_called_once_with(
             sandbox_id="test-sandbox-id",
-            namespace=k8s_service.namespace
+            namespace=k8s_service.namespace,
+            wait=True,
         )
     
     def test_delete_nonexistent_sandbox_raises_404(self, k8s_service):
@@ -1607,20 +1617,25 @@ class TestDeleteSandbox:
 
     def test_delete_sandbox_removes_managed_pvcs(self, k8s_service, mock_workload):
         k8s_service.workload_provider.get_workload.return_value = mock_workload
-        k8s_service.workload_provider.delete_workload.return_value = None
+        k8s_service.workload_provider.delete_workload.return_value = True
 
         pvc = MagicMock()
         pvc.metadata = MagicMock(name="metadata")
         pvc.metadata.name = "auto-data"
-        k8s_service.k8s_client.list_pvcs.return_value = [pvc]
+        k8s_service.workload_provider.get_workload.return_value = None
+        k8s_service.k8s_client.list_pods.return_value = []
+        k8s_service.k8s_client.list_pvcs.side_effect = [[pvc], []]
 
-        k8s_service.delete_sandbox("test-sandbox-id")
+        response = k8s_service.delete_sandbox("test-sandbox-id")
+
+        assert response.deletion_confirmed is True
 
         selector = (
             f"{SANDBOX_MANAGED_VOLUMES_LABEL}=server,"
             f"{SANDBOX_ID_LABEL}=test-sandbox-id"
         )
-        k8s_service.k8s_client.list_pvcs.assert_called_once_with(
+        assert k8s_service.k8s_client.list_pvcs.call_count == 2
+        k8s_service.k8s_client.list_pvcs.assert_called_with(
             k8s_service.namespace,
             label_selector=selector,
         )
@@ -1663,14 +1678,53 @@ class TestDeleteSandbox:
             "orphan-pvc",
         )
 
-    def test_delete_sandbox_pvc_cleanup_is_best_effort(self, k8s_service, mock_workload):
+    def test_delete_sandbox_pvc_cleanup_is_best_effort(
+        self, k8s_service, mock_workload, monkeypatch
+    ):
         # list_pvcs failure (e.g. 403) must not break sandbox deletion.
-        k8s_service.workload_provider.get_workload.return_value = mock_workload
-        k8s_service.workload_provider.delete_workload.return_value = None
+        k8s_service.workload_provider.get_workload.return_value = None
+        k8s_service.workload_provider.delete_workload.return_value = True
         k8s_service.k8s_client.list_pvcs.side_effect = Exception("forbidden")
+        monkeypatch.setattr(
+            "opensandbox_server.services.k8s.kubernetes_service._K8S_DELETION_CONFIRMATION_TIMEOUT_SECONDS",
+            0,
+        )
 
         # Should not raise — workload deletion already succeeded.
-        k8s_service.delete_sandbox("test-sandbox-id")
+        response = k8s_service.delete_sandbox("test-sandbox-id")
+
+        assert response.deletion_confirmed is False
+        k8s_service.k8s_client.delete_pvc.assert_not_called()
+
+    def test_delete_sandbox_waits_for_delayed_pod_removal(self, k8s_service, mock_workload):
+        k8s_service.workload_provider.get_workload.return_value = None
+        k8s_service.workload_provider.delete_workload.return_value = True
+        k8s_service.k8s_client.list_pods.side_effect = [[MagicMock()], []]
+        k8s_service.k8s_client.list_pvcs.return_value = []
+
+        response = k8s_service.delete_sandbox("test-sandbox-id")
+
+        assert response.deletion_confirmed is True
+        assert k8s_service.k8s_client.list_pods.call_count == 2
+
+    def test_delete_sandbox_timeout_returns_unconfirmed_without_error(
+        self, k8s_service, mock_workload, monkeypatch
+    ):
+        k8s_service.workload_provider.get_workload.return_value = mock_workload
+        k8s_service.workload_provider.delete_workload.return_value = False
+        k8s_service.k8s_client.list_pods.return_value = []
+        pvc = MagicMock()
+        pvc.metadata = MagicMock(name="metadata")
+        pvc.metadata.name = "live-pvc"
+        k8s_service.k8s_client.list_pvcs.return_value = [pvc]
+        monkeypatch.setattr(
+            "opensandbox_server.services.k8s.kubernetes_service._K8S_DELETION_CONFIRMATION_TIMEOUT_SECONDS",
+            0,
+        )
+
+        response = k8s_service.delete_sandbox("test-sandbox-id")
+
+        assert response.deletion_confirmed is False
         k8s_service.k8s_client.delete_pvc.assert_not_called()
 
 

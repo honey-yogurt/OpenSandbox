@@ -501,6 +501,27 @@ class TestK8sClient:
             name="foo-1", grace_period_seconds=0
         )
 
+    def test_delete_custom_object_wait_confirms_disappearance(self, k8s_runtime_config):
+        c = self._make_client(k8s_runtime_config)
+        c.get_custom_object = MagicMock(side_effect=[{"metadata": {"name": "foo-1"}}, None])
+
+        confirmed = c.delete_custom_object(
+            "g", "v1", "ns", "foos", "foo-1", wait=True, poll_interval_seconds=0
+        )
+
+        assert confirmed is True
+        assert c.get_custom_object.call_count == 2
+
+    def test_delete_custom_object_wait_times_out_without_raising(self, k8s_runtime_config):
+        c = self._make_client(k8s_runtime_config)
+        c.get_custom_object = MagicMock(return_value={"metadata": {"name": "foo-1"}})
+
+        confirmed = c.delete_custom_object(
+            "g", "v1", "ns", "foos", "foo-1", wait=True, wait_timeout_seconds=0
+        )
+
+        assert confirmed is False
+
     def test_patch_custom_object_delegates_to_api(self, k8s_runtime_config):
         c = self._make_client(k8s_runtime_config)
         body = {"spec": {"replicas": 2}}

@@ -117,13 +117,17 @@ class WorkloadProvider(ABC):
         pass
     
     @abstractmethod
-    def delete_workload(self, sandbox_id: str, namespace: str) -> None:
+    def delete_workload(self, sandbox_id: str, namespace: str, wait: bool = False) -> bool:
         """
         Delete a workload resource.
 
         Args:
             sandbox_id: Unique sandbox identifier
             namespace: Kubernetes namespace
+            wait: Whether to wait for the workload resource to disappear
+
+        Returns:
+            Whether the workload resource disappeared when waiting was requested
 
         Raises:
             ApiException: If deletion fails

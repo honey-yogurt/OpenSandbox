@@ -19,6 +19,7 @@ operations. All API access goes through this class.
 
 import logging
 import threading
+import time
 from functools import partial
 from typing import Callable, Any, Dict, List, Optional, Tuple
 
@@ -354,8 +355,11 @@ class K8sClient:
         plural: str,
         name: str,
         grace_period_seconds: int = 0,
-    ) -> None:
-        """Delete a namespaced custom resource."""
+        wait: bool = False,
+        wait_timeout_seconds: float = 60.0,
+        poll_interval_seconds: float = 0.5,
+    ) -> bool:
+        """Delete a namespaced custom resource, optionally waiting until it disappears."""
         if self._write_limiter:
             self._write_limiter.acquire()
         self.get_custom_objects_api().delete_namespaced_custom_object(
@@ -369,6 +373,32 @@ class K8sClient:
         informer = self._lookup_informer(group, version, plural, namespace)
         if informer:
             informer.invalidate()
+
+        if not wait:
+            return True
+
+        deadline = time.monotonic() + max(0.0, wait_timeout_seconds)
+        while True:
+            if self.get_custom_object(
+                group=group,
+                version=version,
+                namespace=namespace,
+                plural=plural,
+                name=name,
+            ) is None:
+                return True
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                logger.warning(
+                    "Timed out after %ss waiting for %s/%s %r in namespace %r to disappear",
+                    wait_timeout_seconds,
+                    group,
+                    plural,
+                    name,
+                    namespace,
+                )
+                return False
+            time.sleep(min(poll_interval_seconds, remaining))
 
     def patch_custom_object(
         self,

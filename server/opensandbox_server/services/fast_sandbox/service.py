@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Optional
@@ -37,6 +38,7 @@ from starlette import status
 from opensandbox_server.api.schema import (
     CreateSandboxRequest,
     CreateSandboxResponse,
+    DeleteSandboxResponse,
     Endpoint,
     ListSandboxesRequest,
     ListSandboxesResponse,
@@ -497,7 +499,7 @@ class FastSandboxService(SandboxService, ExtensionService):
     def list_sandboxes(self, request: ListSandboxesRequest) -> ListSandboxesResponse:
         return _build_list_sandboxes_response(self.list_sandbox_objects(), request)
 
-    def delete_sandbox(self, sandbox_id: str) -> None:
+    def delete_sandbox(self, sandbox_id: str) -> DeleteSandboxResponse:
         # Runtime observations can disappear before the CR during finalization.
         # Deletion needs durable identity, not a live Fastlet Get observation.
         metadata = self._get_cr(sandbox_id)["metadata"]
@@ -512,6 +514,26 @@ class FastSandboxService(SandboxService, ExtensionService):
             raise self._fastpath_http_error(exc) from exc
         finally:
             self._cr_reader.invalidate(namespace)
+
+        deletion_confirmed = self._wait_for_cr_deletion(sandbox_id)
+        return DeleteSandboxResponse(
+            deletionConfirmed=deletion_confirmed,
+            deletedAt=datetime.now(timezone.utc),
+        )
+
+    def _wait_for_cr_deletion(self, sandbox_id: str) -> bool:
+        deadline = time.monotonic() + 60.0
+        while True:
+            try:
+                self._get_cr(sandbox_id)
+            except HTTPException as exc:
+                if exc.status_code == status.HTTP_404_NOT_FOUND:
+                    return True
+                raise
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            time.sleep(min(0.5, remaining))
 
     def pause_sandbox(self, sandbox_id: str) -> None:
         """Persist the pause intent; PAUSING -> PAUSED completes asynchronously."""
