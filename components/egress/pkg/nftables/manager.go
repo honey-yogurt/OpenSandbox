@@ -156,6 +156,25 @@ func (m *Manager) ApplyStatic(ctx context.Context, p *policy.NetworkPolicy) erro
 	return nil
 }
 
+func (m *Manager) VerifyStatic(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.quiesced.Load() {
+		return ErrQuiesced
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	output, err := m.run(ctx, "list table inet "+tableName+"\n")
+	if err != nil {
+		return fmt.Errorf("verify nftables table inet %s: %w", tableName, err)
+	}
+	if !strings.Contains(strings.ToLower(string(output)), "chain "+chainName) {
+		return fmt.Errorf("verify nftables table inet %s: missing chain %s", tableName, chainName)
+	}
+	return nil
+}
+
 func (m *Manager) AddResolvedIPs(ctx context.Context, ips []ResolvedIP) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

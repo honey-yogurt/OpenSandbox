@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -91,7 +92,9 @@ func (l *stagedTestAlwaysLoader) RefreshIfDueWithApply(_ time.Time, apply func(d
 
 type stubNft struct {
 	err         error
+	verifyErr   error
 	calls       int
+	verifies    int
 	quiesces    int
 	applied     *policy.NetworkPolicy
 	onApply     func(*policy.NetworkPolicy)
@@ -109,6 +112,11 @@ func (s *stubNft) ApplyStatic(ctx context.Context, p *policy.NetworkPolicy) erro
 		s.onApply(p)
 	}
 	return s.err
+}
+
+func (s *stubNft) VerifyStatic(context.Context) error {
+	s.verifies++
+	return s.verifyErr
 }
 
 func TestReloadAlwaysRules_NftFailurePreservesRulesAndRetriesBeforeProxyPublish(t *testing.T) {
@@ -391,6 +399,66 @@ func TestHandleGet_ReturnsEnforcementMode(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(body), `"enforcementMode":"dns"`, "expected enforcementMode dns in response")
+}
+
+func TestHandleEgressStatus_VerifiedNftMode(t *testing.T) {
+	srv := &policyServer{
+		proxy:           &stubProxy{},
+		nft:             &stubNft{},
+		enforcementMode: constants.PolicyDnsNft,
+	}
+	require.NoError(t, srv.verifyEnforcement(context.Background()))
+
+	req := httptest.NewRequest(http.MethodGet, "/egress/status", nil)
+	w := httptest.NewRecorder()
+	srv.handleEgressStatus(w, req)
+
+	require.Equal(t, http.StatusOK, w.Result().StatusCode)
+	var response map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	require.Equal(t, "enforced", response["enforcementStatus"])
+	require.Equal(t, true, response["enforced"])
+	require.Equal(t, constants.PolicyDnsNft, response["mode"])
+	require.NotEmpty(t, response["lastVerifiedAt"])
+}
+
+func TestHandleEgressStatus_DnsModeWarnsPartialEnforcement(t *testing.T) {
+	srv := &policyServer{proxy: &stubProxy{}, nft: nil, enforcementMode: constants.PolicyDnsOnly}
+	require.NoError(t, srv.verifyEnforcement(context.Background()))
+
+	req := httptest.NewRequest(http.MethodGet, "/egress/status", nil)
+	w := httptest.NewRecorder()
+	srv.handleEgressStatus(w, req)
+
+	require.Equal(t, http.StatusOK, w.Result().StatusCode)
+	var response map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	require.Equal(t, "partial", response["enforcementStatus"])
+	require.Equal(t, false, response["enforced"])
+	require.Contains(t, response["warning"], "cannot block direct IP connections")
+	require.Empty(t, response["lastVerifiedAt"])
+}
+
+func TestHandleEgressStatus_NftApplyFailureRetainsReason(t *testing.T) {
+	srv := &policyServer{
+		proxy:           &stubProxy{},
+		nft:             &stubNft{err: errors.New("kernel rejected ruleset")},
+		enforcementMode: constants.PolicyDnsNft,
+	}
+	req := httptest.NewRequest(http.MethodPost, "/policy", strings.NewReader(`{"defaultAction":"deny"}`))
+	w := httptest.NewRecorder()
+	srv.handlePolicy(w, req)
+	require.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
+
+	req = httptest.NewRequest(http.MethodGet, "/egress/status", nil)
+	w = httptest.NewRecorder()
+	srv.handleEgressStatus(w, req)
+
+	var response map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	require.Equal(t, "failed", response["enforcementStatus"])
+	require.Equal(t, false, response["enforced"])
+	require.Contains(t, response["reason"], "kernel rejected ruleset")
 }
 
 func TestHandlePatch_MergesAndApplies(t *testing.T) {

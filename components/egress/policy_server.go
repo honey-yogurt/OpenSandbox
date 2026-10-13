@@ -31,6 +31,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/alibaba/opensandbox/egress/pkg/api"
 	"github.com/alibaba/opensandbox/egress/pkg/constants"
 	"github.com/alibaba/opensandbox/egress/pkg/credentialvault"
 	"github.com/alibaba/opensandbox/egress/pkg/log"
@@ -96,6 +97,7 @@ func startPolicyServer(
 		alwaysLoader:     policy.NewAlwaysRuleLoader(time.Minute),
 		stopAlwaysReload: make(chan struct{}),
 		mitmGate:         mitmGate,
+		enforcementState: enforcementPending,
 	}
 	if len(quarantineOwners) > 0 {
 		handler.quarantine = quarantineOwners[0]
@@ -118,6 +120,7 @@ func startPolicyServer(
 	}
 
 	mux.HandleFunc("/policy", handler.handlePolicy)
+	mux.HandleFunc("/egress/status", handler.handleEgressStatus)
 	mux.HandleFunc("/credential-vault", handler.handleCredentialVault)
 	mux.HandleFunc("/credential-vault/", handler.handleCredentialVaultSubresource)
 	mux.HandleFunc("/healthz", handler.handleHealthz)
@@ -198,6 +201,9 @@ type policyServer struct {
 
 	lastAlwaysFP              uint64
 	lastAlwaysFPSet           bool
+	enforcementState          string
+	enforcementReason         string
+	enforcementVerifiedAt     time.Time
 	credentialVault           *credentialvault.Store
 	revisionRecovery          *revisionRecoveryState
 	quarantine                *revisionQuarantine
@@ -213,13 +219,20 @@ type policyServer struct {
 	revisionRecoveryRequired atomic.Bool
 }
 
-type policyStatusResponse struct {
-	Status          string `json:"status,omitempty"`
-	Mode            string `json:"mode,omitempty"`
-	EnforcementMode string `json:"enforcementMode,omitempty"`
-	Reason          string `json:"reason,omitempty"`
-	Policy          any    `json:"policy,omitempty"`
+type policyStatusResponse = api.PolicyStatusResponse
+
+const (
+	enforcementPending = "pending"
+	enforcementFailed  = "failed"
+	enforcementPartial = "partial"
+	enforcementOK      = "enforced"
+)
+
+type nftVerifier interface {
+	VerifyStatic(context.Context) error
 }
+
+func ptr[T any](value T) *T { return &value }
 
 func (s *policyServer) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	// Probes must not wait for the policy/effect barrier, even when MITM is optional.
@@ -255,6 +268,86 @@ func (s *policyServer) handlePolicy(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", "GET, POST, PUT, PATCH, DELETE")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *policyServer) handleEgressStatus(w http.ResponseWriter, r *http.Request) {
+	if !s.authorize(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.mu.Lock()
+	state := s.withEnforcementLocked(api.PolicyStatusResponse{})
+	enforcementState := s.enforcementState
+	enforcementMode := s.enforcementMode
+	s.mu.Unlock()
+	writeJSON(w, http.StatusOK, api.EnforcementStatusResponse{
+		Status:            "ok",
+		EnforcementStatus: enforcementState,
+		Enforced:          state.Enforced != nil && *state.Enforced,
+		Mode:              enforcementMode,
+		Reason:            state.Reason,
+		Warning:           state.Warning,
+		LastVerifiedAt:    state.LastVerifiedAt,
+	})
+}
+
+func (s *policyServer) withEnforcementLocked(response api.PolicyStatusResponse) api.PolicyStatusResponse {
+	response.EnforcementMode = s.enforcementMode
+	if !constants.ModeUsesNft(s.enforcementMode) {
+		response.Enforced = ptr(false)
+		response.Warning = "dns-only enforcement filters DNS names but cannot block direct IP connections"
+		if response.Reason == "" {
+			response.Reason = "partial enforcement: direct IP connections are not blocked"
+		}
+		return response
+	}
+
+	response.Enforced = ptr(s.enforcementState == enforcementOK)
+	if s.enforcementState != enforcementOK {
+		response.Reason = s.enforcementReason
+		if response.Reason == "" {
+			response.Reason = "nftables enforcement has not been verified"
+		}
+		return response
+	}
+
+	verifiedAt := s.enforcementVerifiedAt
+	response.LastVerifiedAt = &verifiedAt
+	return response
+}
+
+func (s *policyServer) verifyEnforcement(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.verifyEnforcementLocked(ctx)
+}
+
+func (s *policyServer) verifyEnforcementLocked(ctx context.Context) error {
+	if !constants.ModeUsesNft(s.enforcementMode) {
+		s.enforcementState = enforcementPartial
+		s.enforcementReason = "partial enforcement: direct IP connections are not blocked"
+		return nil
+	}
+	verifier, ok := s.nft.(nftVerifier)
+	if !ok {
+		s.enforcementState = enforcementFailed
+		s.enforcementReason = "nftables manager does not support kernel verification"
+		return errors.New(s.enforcementReason)
+	}
+	if err := verifier.VerifyStatic(ctx); err != nil {
+		s.enforcementState = enforcementFailed
+		s.enforcementReason = fmt.Sprintf("verify nftables rules: %v", err)
+		return err
+	}
+	s.enforcementState = enforcementOK
+	s.enforcementReason = ""
+	s.enforcementVerifiedAt = time.Now().UTC()
+	return nil
 }
 
 func (s *policyServer) handleCredentialVault(w http.ResponseWriter, r *http.Request) {
@@ -608,14 +701,16 @@ func (s *policyServer) handleCredentialVaultActive(w http.ResponseWriter, r *htt
 }
 
 func (s *policyServer) handleGet(w http.ResponseWriter) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	current := s.proxy.CurrentPolicy()
 	mode := modeFromPolicy(current)
-	writeJSON(w, http.StatusOK, policyStatusResponse{
+	writeJSON(w, http.StatusOK, s.withEnforcementLocked(policyStatusResponse{
 		Status:          "ok",
 		Mode:            mode,
 		EnforcementMode: s.enforcementMode,
 		Policy:          current,
-	})
+	}))
 }
 
 func (s *policyServer) handlePost(w http.ResponseWriter, r *http.Request) {
@@ -647,11 +742,11 @@ func (s *policyServer) handlePost(w http.ResponseWriter, r *http.Request) {
 		}
 		logEgressUpdated(def.DefaultAction, nil)
 		log.Infof("policy API: proxy and nftables updated to deny_all")
-		writeJSON(w, http.StatusOK, policyStatusResponse{
+		writeJSON(w, http.StatusOK, s.withEnforcementLocked(policyStatusResponse{
 			Status: "ok",
 			Mode:   "deny_all",
 			Reason: "policy reset to default deny-all",
-		})
+		}))
 		return
 	}
 
@@ -677,11 +772,11 @@ func (s *policyServer) handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 	logEgressUpdated(pol.DefaultAction, pol.Egress)
 	log.Infof("policy API: proxy and nftables updated successfully")
-	writeJSON(w, http.StatusOK, policyStatusResponse{
+	writeJSON(w, http.StatusOK, s.withEnforcementLocked(policyStatusResponse{
 		Status:          "ok",
 		Mode:            mode,
 		EnforcementMode: s.enforcementMode,
-	})
+	}))
 }
 
 func (s *policyServer) handlePatch(w http.ResponseWriter, r *http.Request) {
@@ -743,11 +838,11 @@ func (s *policyServer) handlePatch(w http.ResponseWriter, r *http.Request) {
 	}
 	logEgressUpdated(newPolicy.DefaultAction, patchRules)
 	log.Infof("policy API: patch applied successfully")
-	writeJSON(w, http.StatusOK, policyStatusResponse{
+	writeJSON(w, http.StatusOK, s.withEnforcementLocked(policyStatusResponse{
 		Status:          "ok",
 		Mode:            mode,
 		EnforcementMode: s.enforcementMode,
-	})
+	}))
 }
 
 func (s *policyServer) handleDelete(w http.ResponseWriter, r *http.Request) {
@@ -796,12 +891,12 @@ func (s *policyServer) handleDelete(w http.ResponseWriter, r *http.Request) {
 
 	if removed == 0 {
 		mode := modeFromPolicy(base)
-		writeJSON(w, http.StatusOK, policyStatusResponse{
+		writeJSON(w, http.StatusOK, s.withEnforcementLocked(policyStatusResponse{
 			Status:          "ok",
 			Mode:            mode,
 			EnforcementMode: s.enforcementMode,
 			Reason:          "no matching targets found",
-		})
+		}))
 		return
 	}
 
@@ -833,11 +928,11 @@ func (s *policyServer) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	logEgressUpdated(newPolicy.DefaultAction, removedRules)
 	log.Infof("policy API: delete applied successfully")
-	writeJSON(w, http.StatusOK, policyStatusResponse{
+	writeJSON(w, http.StatusOK, s.withEnforcementLocked(policyStatusResponse{
 		Status:          "ok",
 		Mode:            mode,
 		EnforcementMode: s.enforcementMode,
-	})
+	}))
 }
 
 // commitPolicy applies one change under s.mu. The experimental branch holds
@@ -881,13 +976,29 @@ func (s *policyServer) commitPolicy(ctx context.Context, w http.ResponseWriter, 
 		s.invalidateRevisionBootstrapLocked()
 		nftCtx, nftCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer nftCancel()
+		s.enforcementState = enforcementPending
+		s.enforcementReason = "nftables policy apply pending"
 		if err := s.nft.ApplyStatic(nftCtx, merged.WithExtraAllowIPs(s.nameserverIPs)); err != nil {
+			s.enforcementState = enforcementFailed
+			s.enforcementReason = fmt.Sprintf("apply nftables policy: %v", err)
 			logEgressUpdateFailedError(fmt.Sprintf("nftables apply (%s): %v", op, err))
 			log.Errorf("policy API: nftables apply failed (%s): %v", op, err)
 			if restoreErr := restore(); restoreErr != nil {
 				log.Errorf("policy API: restore policy file after failed apply: %v", restoreErr)
 			}
 			http.Error(w, fmt.Sprintf("failed to apply nftables policy: %v", err), http.StatusInternalServerError)
+			return false
+		}
+		if err := s.verifyEnforcementLocked(nftCtx); err != nil {
+			logEgressUpdateFailedError(fmt.Sprintf("nftables verify (%s): %v", op, err))
+			log.Errorf("policy API: nftables verification failed (%s): %v", op, err)
+			http.Error(w, fmt.Sprintf("failed to verify nftables policy: %v", err), http.StatusInternalServerError)
+			return false
+		}
+	}
+	if s.nft == nil {
+		if err := s.verifyEnforcementLocked(ctx); err != nil {
+			http.Error(w, fmt.Sprintf("failed to verify egress enforcement: %v", err), http.StatusInternalServerError)
 			return false
 		}
 	}

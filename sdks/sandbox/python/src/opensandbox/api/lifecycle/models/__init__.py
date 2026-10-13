@@ -34,6 +34,9 @@ from .create_sandbox_response_metadata import CreateSandboxResponseMetadata
 from .create_snapshot_request import CreateSnapshotRequest
 from .credential_proxy_config import CredentialProxyConfig
 from .delete_sandbox_response import DeleteSandboxResponse
+from .egress_enforcement_status import EgressEnforcementStatus
+from .egress_enforcement_status_enforcement_status import EgressEnforcementStatusEnforcementStatus
+from .egress_enforcement_status_mode import EgressEnforcementStatusMode
 from .endpoint import Endpoint
 from .endpoint_headers import EndpointHeaders
 from .error_response import ErrorResponse
@@ -101,6 +104,9 @@ __all__ = (
     "CreateSnapshotRequest",
     "CredentialProxyConfig",
     "DeleteSandboxResponse",
+    "EgressEnforcementStatus",
+    "EgressEnforcementStatusEnforcementStatus",
+    "EgressEnforcementStatusMode",
     "Endpoint",
     "EndpointHeaders",
     "ErrorResponse",

@@ -32,6 +32,17 @@ async def get_network_policy(request: Request, sandbox_id: str):
     return await _proxy_http_request(request, sandbox_id, 18080, "policy", internal=True)
 
 
+@router.get("/sandboxes/{sandbox_id}/egress/status")
+async def get_egress_status(request: Request, sandbox_id: str):
+    """Read live kernel-enforcement state from the sandbox egress service."""
+    if sandbox_id.startswith("fsb-"):
+        raise HTTPException(
+            503,
+            detail="Live egress enforcement status is unavailable for Fsb sandboxes.",
+        )
+    return await _proxy_http_request(request, sandbox_id, 18080, "egress/status", internal=True)
+
+
 @router.put("/sandboxes/{sandbox_id}/networkpolicy")
 async def replace_network_policy(request: Request, sandbox_id: str, policy: NetworkPolicy):
     if sandbox_id.startswith("fsb-"):

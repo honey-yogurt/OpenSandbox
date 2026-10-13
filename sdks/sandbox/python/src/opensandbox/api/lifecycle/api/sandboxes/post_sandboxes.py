@@ -24,14 +24,17 @@ from ...client import AuthenticatedClient, Client
 from ...models.create_sandbox_request import CreateSandboxRequest
 from ...models.create_sandbox_response import CreateSandboxResponse
 from ...models.error_response import ErrorResponse
-from ...types import Response
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
     *,
     body: CreateSandboxRequest,
+    idempotency_key: str | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
+    if not isinstance(idempotency_key, Unset):
+        headers["Idempotency-Key"] = idempotency_key
 
     _kwargs: dict[str, Any] = {
         "method": "post",
@@ -105,6 +108,7 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: CreateSandboxRequest,
+    idempotency_key: str | Unset = UNSET,
 ) -> Response[CreateSandboxResponse | ErrorResponse]:
     r"""Create a sandbox
 
@@ -130,6 +134,7 @@ def sync_detailed(
     - `OPEN-SANDBOX-API-KEY: <api-key>` header
 
     Args:
+        idempotency_key (str | Unset):
         body (CreateSandboxRequest): Request to create a new sandbox from either a container
             image, a snapshot,
             or a pre-configured pool (via `extensions.poolRef`).
@@ -162,6 +167,7 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        idempotency_key=idempotency_key,
     )
 
     response = client.get_httpx_client().request(
@@ -175,6 +181,7 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     body: CreateSandboxRequest,
+    idempotency_key: str | Unset = UNSET,
 ) -> CreateSandboxResponse | ErrorResponse | None:
     r"""Create a sandbox
 
@@ -200,6 +207,7 @@ def sync(
     - `OPEN-SANDBOX-API-KEY: <api-key>` header
 
     Args:
+        idempotency_key (str | Unset):
         body (CreateSandboxRequest): Request to create a new sandbox from either a container
             image, a snapshot,
             or a pre-configured pool (via `extensions.poolRef`).
@@ -233,6 +241,7 @@ def sync(
     return sync_detailed(
         client=client,
         body=body,
+        idempotency_key=idempotency_key,
     ).parsed
 
 
@@ -240,6 +249,7 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: CreateSandboxRequest,
+    idempotency_key: str | Unset = UNSET,
 ) -> Response[CreateSandboxResponse | ErrorResponse]:
     r"""Create a sandbox
 
@@ -265,6 +275,7 @@ async def asyncio_detailed(
     - `OPEN-SANDBOX-API-KEY: <api-key>` header
 
     Args:
+        idempotency_key (str | Unset):
         body (CreateSandboxRequest): Request to create a new sandbox from either a container
             image, a snapshot,
             or a pre-configured pool (via `extensions.poolRef`).
@@ -297,6 +308,7 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        idempotency_key=idempotency_key,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -308,6 +320,7 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     body: CreateSandboxRequest,
+    idempotency_key: str | Unset = UNSET,
 ) -> CreateSandboxResponse | ErrorResponse | None:
     r"""Create a sandbox
 
@@ -333,6 +346,7 @@ async def asyncio(
     - `OPEN-SANDBOX-API-KEY: <api-key>` header
 
     Args:
+        idempotency_key (str | Unset):
         body (CreateSandboxRequest): Request to create a new sandbox from either a container
             image, a snapshot,
             or a pre-configured pool (via `extensions.poolRef`).
@@ -367,5 +381,6 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             body=body,
+            idempotency_key=idempotency_key,
         )
     ).parsed

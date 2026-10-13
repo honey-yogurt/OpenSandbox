@@ -192,6 +192,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to start policy server: %v", err)
 	}
+	if err := policyHandler.verifyEnforcement(ctx); err != nil {
+		log.Errorf("initial egress enforcement verification failed: %v", err)
+	}
 	log.Infof("policy server listening on %s (POST /policy)", httpAddr)
 
 	mitm, err := startMitmproxyTransparentIfEnabled(ctx, policyHandler)

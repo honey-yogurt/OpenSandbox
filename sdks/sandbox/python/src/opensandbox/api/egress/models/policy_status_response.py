@@ -16,10 +16,12 @@
 
 from __future__ import annotations
 
+import datetime
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from attrs import define as _attrs_define
+from dateutil.parser import isoparse
 
 from ..types import UNSET, Unset
 
@@ -38,6 +40,10 @@ class PolicyStatusResponse:
         mode (str | Unset): Derived runtime mode for the current policy. Example: deny_all.
         enforcement_mode (str | Unset): Egress sidecar enforcement backend mode. Example: dns.
         reason (str | Unset): Optional human-readable reason when the sidecar returns extra context.
+        warning (str | Unset): Optional warning when enforcement is partial.
+        enforced (bool | Unset): Whether the policy has been verified in the kernel. False for DNS-only partial
+            enforcement.
+        last_verified_at (datetime.datetime | Unset): UTC time of the last successful kernel verification.
         policy (NetworkPolicy | Unset): Egress network policy matching the sidecar `/policy` request body.
             If `defaultAction` is omitted, the sidecar defaults to "deny"; passing an empty
             object or null results in allow-all behavior at startup.
@@ -47,6 +53,9 @@ class PolicyStatusResponse:
     mode: str | Unset = UNSET
     enforcement_mode: str | Unset = UNSET
     reason: str | Unset = UNSET
+    warning: str | Unset = UNSET
+    enforced: bool | Unset = UNSET
+    last_verified_at: datetime.datetime | Unset = UNSET
     policy: NetworkPolicy | Unset = UNSET
 
     def to_dict(self) -> dict[str, Any]:
@@ -57,6 +66,14 @@ class PolicyStatusResponse:
         enforcement_mode = self.enforcement_mode
 
         reason = self.reason
+
+        warning = self.warning
+
+        enforced = self.enforced
+
+        last_verified_at: str | Unset = UNSET
+        if not isinstance(self.last_verified_at, Unset):
+            last_verified_at = self.last_verified_at.isoformat()
 
         policy: dict[str, Any] | Unset = UNSET
         if not isinstance(self.policy, Unset):
@@ -73,6 +90,12 @@ class PolicyStatusResponse:
             field_dict["enforcementMode"] = enforcement_mode
         if reason is not UNSET:
             field_dict["reason"] = reason
+        if warning is not UNSET:
+            field_dict["warning"] = warning
+        if enforced is not UNSET:
+            field_dict["enforced"] = enforced
+        if last_verified_at is not UNSET:
+            field_dict["lastVerifiedAt"] = last_verified_at
         if policy is not UNSET:
             field_dict["policy"] = policy
 
@@ -91,6 +114,17 @@ class PolicyStatusResponse:
 
         reason = d.pop("reason", UNSET)
 
+        warning = d.pop("warning", UNSET)
+
+        enforced = d.pop("enforced", UNSET)
+
+        _last_verified_at = d.pop("lastVerifiedAt", UNSET)
+        last_verified_at: datetime.datetime | Unset
+        if isinstance(_last_verified_at, Unset):
+            last_verified_at = UNSET
+        else:
+            last_verified_at = isoparse(_last_verified_at)
+
         _policy = d.pop("policy", UNSET)
         policy: NetworkPolicy | Unset
         if isinstance(_policy, Unset):
@@ -103,6 +137,9 @@ class PolicyStatusResponse:
             mode=mode,
             enforcement_mode=enforcement_mode,
             reason=reason,
+            warning=warning,
+            enforced=enforced,
+            last_verified_at=last_verified_at,
             policy=policy,
         )
 

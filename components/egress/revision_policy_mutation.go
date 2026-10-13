@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/alibaba/opensandbox/egress/pkg/nftables"
@@ -156,6 +157,10 @@ func (s *policyServer) applyRevisionPolicyLocked(ctx context.Context, m *mitmTra
 				s.detachRevisionMutationLocked(m)
 			}
 			return nil, &nftables.ApplyError{Effect: nftables.ApplyEffectOf(err), Err: errRevisionPolicyNft}
+		}
+		if err := s.verifyEnforcementLocked(ctx); err != nil {
+			s.requireRevisionRecoveryLocked(revisionRecoveryExternalEffectsUnknown)
+			return nil, &nftables.ApplyError{Effect: nftables.ApplyCommitted, Err: fmt.Errorf("verify nftables policy: %w", err)}
 		}
 		nftCommitted = true
 	}

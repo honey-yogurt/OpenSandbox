@@ -225,6 +225,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /sandboxes/{sandboxId}/egress/status:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+    get:
+      tags: [Sandboxes]
+      operationId: getSandboxEgressStatus
+      summary: Read live egress enforcement status
+      description: |
+        Proxies the sandbox egress service's live kernel-enforcement status for
+        non-Fsb backends. Fsb currently does not expose live per-sandbox
+        enforcement state and returns 503 instead of reporting intent as proof.
+      responses:
+        '200':
+          description: Egress enforcement status.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EgressEnforcementStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          description: Live enforcement status is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /metrics/events:
     post:
       tags: [Metrics]
@@ -2193,6 +2226,31 @@ components:
           description: Optional context returned by the sidecar.
         policy:
           $ref: '#/components/schemas/NetworkPolicy'
+      additionalProperties: false
+    EgressEnforcementStatus:
+      type: object
+      description: Live egress enforcement state reported by the sandbox egress service.
+      properties:
+        status:
+          type: string
+          example: ok
+        enforcementStatus:
+          type: string
+          enum: [enforced, failed, pending, partial]
+        enforced:
+          type: boolean
+          description: True only after kernel rules have been verified.
+        mode:
+          type: string
+          enum: [dns, dns+nft]
+        reason:
+          type: string
+        warning:
+          type: string
+        lastVerifiedAt:
+          type: string
+          format: date-time
+      required: [status, enforcementStatus, enforced, mode]
       additionalProperties: false
     NetworkPolicy:
       type: object

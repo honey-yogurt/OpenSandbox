@@ -18,7 +18,7 @@ info:
 
     1. Use the Sandbox Lifecycle API to resolve the sandbox endpoint for the egress
        service port.
-    2. Send requests directly to that endpoint's `/policy` or
+    2. Send requests directly to that endpoint's `/policy`, `/egress/status`, or
        `/credential-vault` route.
 
     ## Authentication
@@ -187,6 +187,42 @@ paths:
             text/plain:
               schema:
                 type: string
+  /egress/status:
+    get:
+      tags: [Policy]
+      summary: Get kernel enforcement status
+      description: |
+        Returns whether the current egress rules have been verified in the
+        kernel. In `dns+nft` mode, verification follows each static nftables
+        apply. DNS-only mode reports partial enforcement because it cannot block
+        direct IP connections.
+      responses:
+        '200':
+          description: Enforcement status returned successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnforcementStatusResponse'
+              examples:
+                enforced:
+                  summary: nftables rules verified
+                  value:
+                    status: ok
+                    enforcementStatus: enforced
+                    enforced: true
+                    mode: dns+nft
+                dns-only:
+                  summary: DNS-only partial enforcement
+                  value:
+                    status: ok
+                    enforcementStatus: partial
+                    enforced: false
+                    mode: dns
+                    warning: dns-only enforcement filters DNS names but cannot block direct IP connections
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /credential-vault:
     post:
       tags: [CredentialVault]
@@ -397,8 +433,41 @@ components:
         reason:
           type: string
           description: Optional human-readable reason when the sidecar returns extra context.
+        warning:
+          type: string
+          description: Optional warning when enforcement is partial.
+        enforced:
+          type: boolean
+          description: Whether the policy has been verified in the kernel. False for DNS-only partial enforcement.
+        lastVerifiedAt:
+          type: string
+          format: date-time
+          description: UTC time of the last successful kernel verification.
         policy:
           $ref: '#/components/schemas/NetworkPolicy'
+      additionalProperties: false
+    EnforcementStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        enforcementStatus:
+          type: string
+          enum: [enforced, failed, pending, partial]
+        enforced:
+          type: boolean
+        mode:
+          type: string
+          enum: [dns, dns+nft]
+        reason:
+          type: string
+        warning:
+          type: string
+        lastVerifiedAt:
+          type: string
+          format: date-time
+      required: [status, enforcementStatus, enforced, mode]
       additionalProperties: false
     NetworkPolicy:
       type: object

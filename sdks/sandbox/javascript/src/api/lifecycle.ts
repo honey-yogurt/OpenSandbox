@@ -70,6 +70,31 @@ export interface paths {
         patch: operations["patchSandboxNetworkPolicy"];
         trace?: never;
     };
+    "/sandboxes/{sandboxId}/egress/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Unique sandbox identifier */
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read live egress enforcement status
+         * @description Proxies the sandbox egress service's live kernel-enforcement status for
+         *     non-Fsb backends. Fsb currently does not expose live per-sandbox
+         *     enforcement state and returns 503 instead of reporting intent as proof.
+         */
+        get: operations["getSandboxEgressStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/metrics/events": {
         parameters: {
             query?: never;
@@ -176,7 +201,15 @@ export interface paths {
         post: {
             parameters: {
                 query?: never;
-                header?: never;
+                header?: {
+                    /**
+                     * @description Makes create retries idempotent. Reusing a key with the same request
+                     *     body returns the same sandbox, while reusing it with a different body
+                     *     returns `409 Conflict`. A key can create a new sandbox after its
+                     *     sandbox has been destroyed. Keys are scoped to the authenticated tenant.
+                     */
+                    "Idempotency-Key"?: string;
+                };
                 path?: never;
                 cookie?: never;
             };
@@ -1675,6 +1708,21 @@ export interface components {
             reason?: string;
             policy?: components["schemas"]["NetworkPolicy"];
         };
+        /** @description Live egress enforcement state reported by the sandbox egress service. */
+        EgressEnforcementStatus: {
+            /** @example ok */
+            status: string;
+            /** @enum {string} */
+            enforcementStatus: "enforced" | "failed" | "pending" | "partial";
+            /** @description True only after kernel rules have been verified. */
+            enforced: boolean;
+            /** @enum {string} */
+            mode: "dns" | "dns+nft";
+            reason?: string;
+            warning?: string;
+            /** Format: date-time */
+            lastVerifiedAt?: string;
+        };
         /**
          * @description Egress network policy matching the sidecar `/policy` request body.
          *     If `defaultAction` is omitted, the sidecar defaults to "deny"; passing an empty
@@ -2247,6 +2295,42 @@ export interface operations {
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalServerError"];
             /** @description FastPath or policy state is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getSandboxEgressStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Unique sandbox identifier */
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Egress enforcement status. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EgressEnforcementStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalServerError"];
+            /** @description Live enforcement status is unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;

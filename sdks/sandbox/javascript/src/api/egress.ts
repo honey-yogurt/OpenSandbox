@@ -1,11 +1,11 @@
 // Copyright 2026 The OpenSandbox Authors
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -170,6 +170,50 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/egress/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get kernel enforcement status
+         * @description Returns whether the current egress rules have been verified in the
+         *     kernel. In `dns+nft` mode, verification follows each static nftables
+         *     apply. DNS-only mode reports partial enforcement because it cannot block
+         *     direct IP connections.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Enforcement status returned successfully. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EnforcementStatusResponse"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                500: components["responses"]["InternalServerError"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/credential-vault": {
@@ -472,7 +516,29 @@ export interface components {
             enforcementMode?: string;
             /** @description Optional human-readable reason when the sidecar returns extra context. */
             reason?: string;
+            /** @description Optional warning when enforcement is partial. */
+            warning?: string;
+            /** @description Whether the policy has been verified in the kernel. False for DNS-only partial enforcement. */
+            enforced?: boolean;
+            /**
+             * Format: date-time
+             * @description UTC time of the last successful kernel verification.
+             */
+            lastVerifiedAt?: string;
             policy?: components["schemas"]["NetworkPolicy"];
+        };
+        EnforcementStatusResponse: {
+            /** @example ok */
+            status: string;
+            /** @enum {string} */
+            enforcementStatus: "enforced" | "failed" | "pending" | "partial";
+            enforced: boolean;
+            /** @enum {string} */
+            mode: "dns" | "dns+nft";
+            reason?: string;
+            warning?: string;
+            /** Format: date-time */
+            lastVerifiedAt?: string;
         };
         /**
          * @description Egress network policy matching the sidecar `/policy` request body.

@@ -61,6 +61,27 @@ func TestApplyStatic_BuildsRuleset_DefaultDeny(t *testing.T) {
 	expectContains(t, rendered, "add rule inet opensandbox egress drop")
 }
 
+func TestVerifyStatic_QueriesKernelTable(t *testing.T) {
+	var scripts []string
+	manager := NewManagerWithRunner(func(_ context.Context, script string) ([]byte, error) {
+		scripts = append(scripts, script)
+		return []byte("table inet opensandbox\n\tchain egress"), nil
+	})
+
+	require.NoError(t, manager.VerifyStatic(context.Background()))
+	require.Equal(t, []string{"list table inet opensandbox\n"}, scripts)
+}
+
+func TestVerifyStatic_ReturnsKernelError(t *testing.T) {
+	manager := NewManagerWithRunner(func(_ context.Context, _ string) ([]byte, error) {
+		return nil, fmt.Errorf("no such table")
+	})
+
+	err := manager.VerifyStatic(context.Background())
+	require.ErrorContains(t, err, "verify nftables table inet opensandbox")
+	require.ErrorContains(t, err, "no such table")
+}
+
 func TestApplyStatic_DefaultDenyFallbackRuleUsesPlainDrop(t *testing.T) {
 	var rendered string
 	m := NewManagerWithRunner(func(_ context.Context, script string) ([]byte, error) {

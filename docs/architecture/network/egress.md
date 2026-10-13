@@ -29,6 +29,12 @@ Egress is how a sandbox gets a network policy instead of open internet access. I
 
 **Precedence.** First matching rule wins, in this order: platform `deny.always`, platform `allow.always`, then your policy — so the platform's deny always beats your allow. The overlays live in files inside the sidecar image and hot-reload every minute. A reload publishes the parsed pair only after the corresponding nftables static policy is accepted; the experimental revision runtime additionally requires exact receiver confirmation. Parse or apply failures keep the last accepted in-memory rules. Failures remain eligible for retry unless the experimental revision runtime requires recovery, as described below. Your policy is set per sandbox and can be mutated at runtime (add, replace, remove by target) through the API the SDKs expose.
 
+### Execution confirmation
+
+The egress service exposes `GET /egress/status`. In `dns+nft` mode, every static nftables apply is followed by a kernel table query; only a successful query sets `enforcementStatus: enforced`, `enforced: true`, and `lastVerifiedAt`. Apply or verification failures return `enforced: false` with the failure reason. DNS-only mode returns `enforcementStatus: partial` and an explicit warning because name filtering alone cannot stop direct IP connections.
+
+For non-Fsb backends, the lifecycle API proxies this live state as `GET /v1/sandboxes/{sandboxId}/egress/status`. Business workflows should poll that endpoint and require `mode: dns+nft`, `enforced: true`, and `lastVerifiedAt` before admitting production data.
+
 ## Design decisions
 
 **Enforcement lives in the data path, not beside it.** The sidecar shares the sandbox's network namespace and installs redirect rules there, so every packet passes the policy engine without application cooperation — and without the option to bypass it, because the workload holds no `NET_ADMIN` in that namespace.

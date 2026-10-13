@@ -933,6 +933,36 @@ def test_legacy_policy_route_preserves_body_for_existing_proxy(http_fsb, monkeyp
     assert client.put("/v1/sandboxes/legacy-id/networkpolicy", json=policy).json() == policy
 
 
+def test_legacy_egress_status_route_proxies_live_sidecar_state(http_fsb, monkeypatch):
+    from starlette.responses import JSONResponse
+
+    client, _, _ = http_fsb
+
+    async def proxy(request, sandbox_id, port, path, **kwargs):
+        assert (sandbox_id, port, path) == ("legacy-id", 18080, "egress/status")
+        assert kwargs["internal"] is True
+        return JSONResponse(
+            {
+                "status": "ok",
+                "enforcementStatus": "enforced",
+                "enforced": True,
+                "mode": "dns+nft",
+            }
+        )
+
+    monkeypatch.setattr(network_policy, "_proxy_http_request", proxy)
+    response = client.get("/v1/sandboxes/legacy-id/egress/status")
+    assert response.status_code == 200
+    assert response.json()["enforced"] is True
+
+
+def test_fsb_egress_status_does_not_report_intent_as_enforced(persisted_fsb):
+    client, _, _, sandbox_id = persisted_fsb
+    response = client.get(f"/v1/sandboxes/{sandbox_id}/egress/status")
+    assert response.status_code == 503
+    assert "Live egress enforcement status is unavailable" in response.text
+
+
 @pytest.mark.parametrize(
     "k8s_namespace,expected_namespace",
     [
