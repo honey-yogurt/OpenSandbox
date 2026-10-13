@@ -1139,6 +1139,22 @@ class RenewSandboxExpirationResponse(BaseModel):
 
 
 # ============================================================================
+# Secure Access
+# ============================================================================
+
+class RotateSecureAccessResponse(BaseModel):
+    """Response returned after rotating a sandbox secure-access token."""
+
+    token: str = Field(
+        ...,
+        description="New opaque token to send in the OpenSandbox-Secure-Access header",
+    )
+
+    class Config:
+        populate_by_name = True
+
+
+# ============================================================================
 # Endpoint
 # ============================================================================
 

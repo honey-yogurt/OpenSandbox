@@ -76,6 +76,7 @@ from .pvc import PVC
 from .renew_sandbox_expiration_request import RenewSandboxExpirationRequest
 from .renew_sandbox_expiration_response import RenewSandboxExpirationResponse
 from .resource_limits import ResourceLimits
+from .rotate_secure_access_response import RotateSecureAccessResponse
 from .sandbox import Sandbox
 from .sandbox_extensions import SandboxExtensions
 from .sandbox_lifecycle import SandboxLifecycle
@@ -146,6 +147,7 @@ __all__ = (
     "RenewSandboxExpirationRequest",
     "RenewSandboxExpirationResponse",
     "ResourceLimits",
+    "RotateSecureAccessResponse",
     "Sandbox",
     "SandboxExtensions",
     "SandboxLifecycle",

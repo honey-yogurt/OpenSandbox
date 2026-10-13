@@ -41,6 +41,7 @@ from opensandbox_server.api.schema import (
     PatchSandboxMetadataRequest,
     RenewSandboxExpirationRequest,
     RenewSandboxExpirationResponse,
+    RotateSecureAccessResponse,
     Sandbox,
     SandboxFilter,
     Snapshot,
@@ -664,3 +665,28 @@ def get_sandbox_endpoint(
         response.headers[OPEN_SANDBOX_ORIGIN_HEADER] = SANDBOX_ORIGIN_TEMPLATE
 
     return endpoint
+
+
+@router.post(
+    "/sandboxes/{sandbox_id}/rotate-access",
+    response_model=RotateSecureAccessResponse,
+    responses={
+        200: {"description": "Secure access token rotated successfully"},
+        400: {"model": ErrorResponse, "description": "Secure access is not enabled or rotation is unsupported by the runtime"},
+        401: {"model": ErrorResponse, "description": "Authentication credentials are missing or invalid"},
+        403: {"model": ErrorResponse, "description": "The authenticated user lacks permission for this operation"},
+        404: {"model": ErrorResponse, "description": "The requested sandbox does not exist"},
+        500: {"model": ErrorResponse, "description": "The token could not be persisted"},
+    },
+)
+def rotate_sandbox_secure_access(
+    sandbox_id: str,
+    x_request_id: Optional[str] = Header(None, alias="X-Request-ID", description="Unique request identifier for tracing"),
+) -> RotateSecureAccessResponse:
+    """
+    Rotate a sandbox's secure-access token.
+
+    The previous token is revoked when the new annotation is persisted. Return
+    this operation's token to callers that need continued access to the sandbox.
+    """
+    return sandbox_service.rotate_secure_access_token(sandbox_id)

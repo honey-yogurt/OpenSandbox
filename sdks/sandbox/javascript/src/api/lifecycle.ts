@@ -899,6 +899,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes/{sandboxId}/rotate-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate secure-access token
+         * @description Replace the opaque token required by a sandbox created with
+         *     `secureAccess: true`. The previous token is revoked as soon as the
+         *     replacement is persisted. This operation is authenticated with the
+         *     lifecycle API key.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Unique sandbox identifier */
+                    sandboxId: components["parameters"]["SandboxId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Secure access token rotated successfully. */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestId"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RotateSecureAccessResponse"];
+                    };
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                500: components["responses"]["InternalServerError"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/templates": {
         parameters: {
             query?: never;
@@ -1660,6 +1711,10 @@ export interface components {
              *     Example: "2025-11-16T14:30:45Z"
              */
             expiresAt: string;
+        };
+        RotateSecureAccessResponse: {
+            /** @description New opaque token to send in the OpenSandbox-Secure-Access header. */
+            token: string;
         };
         /**
          * @description Standard error response for all non-2xx HTTP responses.

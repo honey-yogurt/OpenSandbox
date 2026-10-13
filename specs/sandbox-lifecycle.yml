@@ -1041,6 +1041,37 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /sandboxes/{sandboxId}/rotate-access:
+    post:
+      tags: [Sandboxes]
+      summary: Rotate secure-access token
+      description: |
+        Replace the opaque token required by a sandbox created with
+        `secureAccess: true`. The previous token is revoked as soon as the
+        replacement is persisted. This operation is authenticated with the
+        lifecycle API key.
+      parameters:
+        - $ref: '#/components/parameters/SandboxId'
+      responses:
+        '200':
+          description: Secure access token rotated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RotateSecureAccessResponse'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /templates:
     post:
       tags: [Templates]
@@ -2166,6 +2197,15 @@ components:
             The new absolute expiration time in UTC (RFC 3339 format).
 
             Example: "2025-11-16T14:30:45Z"
+      additionalProperties: false
+    RotateSecureAccessResponse:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          description: New opaque token to send in the OpenSandbox-Secure-Access header.
       additionalProperties: false
     ErrorResponse:
       type: object

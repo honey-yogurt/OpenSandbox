@@ -157,6 +157,49 @@ func TestAgentSandboxProvider_GetEndpoint_ServiceFQDN(t *testing.T) {
 	assert.Equal(t, "sandbox.demo.svc.cluster.local", endpoint.Endpoint)
 }
 
+func TestAgentSandboxProvider_GetEndpoint_FollowsRotatedAccessToken(t *testing.T) {
+	namespace := "test-ns"
+	obj := buildUnstructuredSandbox("demo", namespace)
+	obj.SetAnnotations(map[string]string{AnnotationAccessToken: "old-token"})
+	obj.Object["status"] = map[string]any{
+		"serviceFQDN": "sandbox.demo.svc.cluster.local",
+		"conditions": []any{
+			map[string]any{
+				"type":   "Ready",
+				"status": "True",
+			},
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	gvr := schema.GroupVersionResource{
+		Group:    agentSandboxGroup,
+		Version:  agentSandboxVersion,
+		Resource: agentSandboxResource,
+	}
+	fakeDyn := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+		scheme,
+		map[schema.GroupVersionResource]string{gvr: "SandboxList"},
+	)
+	provider := newAgentSandboxProviderWithClient(fakeDyn, 30*time.Second)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	assert.NoError(t, provider.Start(ctx))
+	assert.NoError(t, provider.informer.GetStore().Add(obj))
+
+	before, err := provider.GetEndpoint("demo")
+	assert.NoError(t, err)
+	assert.Equal(t, "old-token", before.SecureAccessToken)
+
+	obj.SetAnnotations(map[string]string{AnnotationAccessToken: "new-token"})
+	assert.NoError(t, provider.informer.GetStore().Update(obj))
+
+	after, err := provider.GetEndpoint("demo")
+	assert.NoError(t, err)
+	assert.Equal(t, "new-token", after.SecureAccessToken)
+}
+
 func TestAgentSandboxProvider_GetEndpoint_NotFound(t *testing.T) {
 	scheme := runtime.NewScheme()
 	gvr := schema.GroupVersionResource{

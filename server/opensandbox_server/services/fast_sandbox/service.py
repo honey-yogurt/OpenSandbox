@@ -47,6 +47,7 @@ from opensandbox_server.api.schema import (
     PatchSandboxMetadataRequest,
     RenewSandboxExpirationRequest,
     RenewSandboxExpirationResponse,
+    RotateSecureAccessResponse,
     Sandbox,
     SandboxStatus,
 )
@@ -766,6 +767,17 @@ class FastSandboxService(SandboxService, ExtensionService):
     ) -> Endpoint:
         return build_endpoint(
             self._app_config.ingress, self._resolve_namespace(), sandbox_id, port, expires
+        )
+
+    def rotate_secure_access_token(self, sandbox_id: str) -> RotateSecureAccessResponse:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": SandboxErrorCodes.INVALID_PARAMETER,
+                "message": (
+                    "Secure access token rotation is not supported for fast sandboxes."
+                ),
+            },
         )
 
     # -- ExtensionService --------------------------------------------------

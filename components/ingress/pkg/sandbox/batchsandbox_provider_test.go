@@ -28,6 +28,7 @@ import (
 	fakeclientset "github.com/alibaba/OpenSandbox/sandbox-k8s/pkg/client/clientset/versioned/fake"
 	informers "github.com/alibaba/OpenSandbox/sandbox-k8s/pkg/client/informers/externalversions"
 	"github.com/alibaba/OpenSandbox/sandbox-k8s/pkg/utils"
+	"github.com/alibaba/opensandbox/ingress/pkg/signature"
 )
 
 // Note: Integration tests with real informers are in e2e tests
@@ -150,6 +151,56 @@ func TestBatchSandboxProvider_WithFakeInformer(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "10.0.0.1", info.Endpoint)
 		assert.Equal(t, "opaque", info.SecureAccessToken)
+	})
+
+	t.Run("GetEndpoint follows rotated access-token annotation", func(t *testing.T) {
+		secureSB := &sandboxv1alpha1.BatchSandbox{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "rotating-sb",
+				Namespace: namespace,
+				Annotations: map[string]string{
+					AnnotationAccessToken:     "old-token",
+					utils.AnnotationEndpoints: `["10.0.0.1"]`,
+				},
+			},
+			Spec: sandboxv1alpha1.BatchSandboxSpec{
+				Replicas: ptr(int32(1)),
+			},
+			Status: sandboxv1alpha1.BatchSandboxStatus{
+				Replicas: 1,
+				Ready:    1,
+			},
+		}
+		err := batchSandboxInformer.Informer().GetStore().Add(secureSB)
+		assert.NoError(t, err)
+
+		before, err := provider.GetEndpoint("rotating-sb")
+		assert.NoError(t, err)
+		assert.Equal(t, "old-token", before.SecureAccessToken)
+
+		secureSB.Annotations[AnnotationAccessToken] = "new-token"
+		err = batchSandboxInformer.Informer().GetStore().Update(secureSB)
+		assert.NoError(t, err)
+
+		after, err := provider.GetEndpoint("rotating-sb")
+		assert.NoError(t, err)
+		assert.Equal(t, "new-token", after.SecureAccessToken)
+
+		oldCheck := signature.CheckIngressSecureAccess(signature.IngressAccessInput{
+			Secure:                    true,
+			ExpectedAccessToken:       after.SecureAccessToken,
+			SecureAccessHeaderPresent: true,
+			RequestedAccessToken:      before.SecureAccessToken,
+		})
+		assert.ErrorIs(t, oldCheck, signature.ErrSecureHeaderMismatch)
+
+		newCheck := signature.CheckIngressSecureAccess(signature.IngressAccessInput{
+			Secure:                    true,
+			ExpectedAccessToken:       after.SecureAccessToken,
+			SecureAccessHeaderPresent: true,
+			RequestedAccessToken:      after.SecureAccessToken,
+		})
+		assert.NoError(t, newCheck)
 	})
 }
 

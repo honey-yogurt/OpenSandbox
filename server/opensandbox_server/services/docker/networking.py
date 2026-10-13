@@ -34,7 +34,7 @@ from requests.exceptions import RequestException
 from docker.errors import DockerException, NotFound as DockerNotFound
 from fastapi import HTTPException, status
 
-from opensandbox_server.api.schema import Endpoint, NetworkPolicy
+from opensandbox_server.api.schema import Endpoint, NetworkPolicy, RotateSecureAccessResponse
 from opensandbox_server.services.constants import (
     EGRESS_MODE_ENV,
     EGRESS_RULES_ENV,
@@ -214,8 +214,7 @@ class DockerNetworkingMixin:
         expires: Optional[int] = None,
         use_proxy_host: bool = False,
     ) -> Endpoint:
-        """
-        Get sandbox access endpoint.
+        """Get sandbox access endpoint.
 
         Args:
             resolve_internal: If True, return the internal container IP (for proxy), ignoring router config.
@@ -291,6 +290,18 @@ class DockerNetworkingMixin:
         container = self._get_container_by_sandbox_id(sandbox_id)
         labels = container.attrs.get("Config", {}).get("Labels") or {}
         return self._resolve_host_mapped_endpoint(public_host, labels, port)
+
+    def rotate_secure_access_token(self, sandbox_id: str) -> RotateSecureAccessResponse:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": SandboxErrorCodes.INVALID_PARAMETER,
+                "message": (
+                    "Secure access token rotation is only supported for Kubernetes "
+                    "sandboxes with secureAccess enabled."
+                ),
+            },
+        )
 
     def _resolve_host_mapped_endpoint(
         self,

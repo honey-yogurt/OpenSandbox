@@ -27,6 +27,7 @@ from opensandbox_server.api.schema import (
     PatchSandboxMetadataRequest,
     RenewSandboxExpirationRequest,
     RenewSandboxExpirationResponse,
+    RotateSecureAccessResponse,
     Sandbox,
 )
 from opensandbox_server.services.diagnostics import DiagnosticResult
@@ -122,6 +123,9 @@ class CompositeSandboxService(SandboxService, ExtensionService):
         return self._backend(sandbox_id).get_endpoint(
             sandbox_id, port, resolve_internal, expires, use_proxy_host
         )
+
+    def rotate_secure_access_token(self, sandbox_id: str) -> RotateSecureAccessResponse:
+        return self._backend(sandbox_id).rotate_secure_access_token(sandbox_id)
 
     def get_access_renew_extend_seconds(self, sandbox_id: str) -> int | None:
         return self._backend(sandbox_id).get_access_renew_extend_seconds(sandbox_id)

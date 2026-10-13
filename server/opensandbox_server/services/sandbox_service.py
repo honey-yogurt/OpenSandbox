@@ -34,6 +34,7 @@ from opensandbox_server.api.schema import (
     PatchSandboxMetadataRequest,
     RenewSandboxExpirationRequest,
     RenewSandboxExpirationResponse,
+    RotateSecureAccessResponse,
     Sandbox,
 )
 from opensandbox_server.services.diagnostics import DiagnosticResult
@@ -372,5 +373,16 @@ class SandboxService(ABC):
         Raises:
             HTTPException: If sandbox not found, endpoint not available,
                 or signed routes are not supported by the runtime/configuration.
+        """
+        pass
+
+    @abstractmethod
+    def rotate_secure_access_token(self, sandbox_id: str) -> RotateSecureAccessResponse:
+        """
+        Replace a sandbox's secure-access token and immediately revoke the old token.
+
+        Raises:
+            HTTPException: If sandbox not found, secure access is not enabled,
+                or the runtime does not support token rotation.
         """
         pass

@@ -158,6 +158,21 @@ curl -s "http://localhost:8080/v1/sandboxes/${SANDBOX_ID}/endpoints/8080?expires
 # → https://{sandbox_id}-8080-{expires_b36}-{signature}.sandbox.example.com/
 ```
 
+## Rotating the Static Token
+
+To revoke a user's current static token without destroying the sandbox, call:
+
+```bash
+curl -X POST \
+  -H "OPEN-SANDBOX-API-KEY: ${API_KEY}" \
+  http://localhost:8080/v1/sandboxes/${SANDBOX_ID}/rotate-access
+```
+
+The response contains the replacement token. Send it in
+`OpenSandbox-Secure-Access`; the previous static token is rejected after the
+replacement is persisted. Signed routes are independent and continue until their
+own expiry.
+
 ## Errors
 
 | Code | Cause |

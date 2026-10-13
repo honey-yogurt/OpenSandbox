@@ -269,6 +269,20 @@ class WorkloadProvider(ABC):
             body=body,
         )
 
+    def patch_annotations(
+        self, name: str, namespace: str, annotations: Dict[str, Optional[str]]
+    ) -> Dict[str, Any]:
+        """Patch workload metadata.annotations via JSON merge patch."""
+        body = {"metadata": {"annotations": annotations}}
+        return self.k8s_client.patch_custom_object(
+            group=self.group,
+            version=self.version,
+            namespace=namespace,
+            plural=self.plural,
+            name=name,
+            body=body,
+        )
+
     def supports_image_auth(self) -> bool:
         """
         Whether this provider supports per-request image pull authentication.

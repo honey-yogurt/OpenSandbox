@@ -2752,7 +2752,7 @@ class TestSignedEndpoint:
                 }
             },
         }
-        k8s_service.workload_provider.get_endpoint_info.return_value = Endpoint(
+        k8s_service.workload_provider.get_endpoint_info.side_effect = lambda *_: Endpoint(
             endpoint="sbx-001-8080.sandbox.example.com",
         )
 
@@ -2760,6 +2760,68 @@ class TestSignedEndpoint:
 
         assert endpoint.headers is not None
         assert endpoint.headers[OPEN_SANDBOX_SECURE_ACCESS_HEADER] == "static-token"
+
+    def test_rotate_secure_access_token_updates_latest_endpoint_header(self, k8s_service):
+        """Rotation revokes the prior token on the server proxy path."""
+        workload = {
+            "metadata": {
+                "name": "sbx-001",
+                "annotations": {
+                    SANDBOX_SECURE_ACCESS_TOKEN_METADATA_KEY: "old-token",
+                },
+            }
+        }
+        k8s_service.workload_provider.get_workload.return_value = workload
+        k8s_service.workload_provider.get_endpoint_info.side_effect = lambda *_: Endpoint(
+            endpoint="sbx-001-8080.sandbox.example.com",
+        )
+
+        def apply_patch(name, namespace, annotations):
+            updated = {
+                "metadata": {
+                    "name": name,
+                    "annotations": dict(
+                        workload["metadata"]["annotations"],
+                        **annotations,
+                    ),
+                },
+            }
+            k8s_service.workload_provider.get_workload.return_value = updated
+            return updated
+
+        k8s_service.workload_provider.patch_annotations.side_effect = apply_patch
+
+        original_endpoint = k8s_service.get_endpoint("sbx-001", 8080)
+        with patch(
+            "opensandbox_server.services.k8s.kubernetes_service.generate_secure_access_token",
+            return_value="new-token",
+        ):
+            response = k8s_service.rotate_secure_access_token("sbx-001")
+
+        rotated_endpoint = k8s_service.get_endpoint("sbx-001", 8080)
+
+        assert response.token == "new-token"
+        assert original_endpoint.headers[OPEN_SANDBOX_SECURE_ACCESS_HEADER] == "old-token"
+        assert rotated_endpoint.headers[OPEN_SANDBOX_SECURE_ACCESS_HEADER] == "new-token"
+        k8s_service.workload_provider.patch_annotations.assert_called_once_with(
+            name="sbx-001",
+            namespace=k8s_service.namespace,
+            annotations={SANDBOX_SECURE_ACCESS_TOKEN_METADATA_KEY: "new-token"},
+        )
+
+    def test_rotate_secure_access_token_rejects_sandbox_without_secure_access(
+        self, k8s_service
+    ):
+        k8s_service.workload_provider.get_workload.return_value = {
+            "metadata": {"name": "sbx-001", "annotations": {}}
+        }
+
+        with pytest.raises(HTTPException) as exc_info:
+            k8s_service.rotate_secure_access_token("sbx-001")
+
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail["code"] == SandboxErrorCodes.INVALID_PARAMETER
+        k8s_service.workload_provider.patch_annotations.assert_not_called()
 
     def test_signed_endpoint_header_mode(self, k8s_service):
         self._setup_gateway_with_secure_access(k8s_service, route_mode="header")

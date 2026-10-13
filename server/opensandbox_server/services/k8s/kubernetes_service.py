@@ -45,6 +45,7 @@ from opensandbox_server.api.schema import (
     PatchSandboxMetadataRequest,
     RenewSandboxExpirationRequest,
     RenewSandboxExpirationResponse,
+    RotateSecureAccessResponse,
     Sandbox,
     SandboxStatus,
 )
@@ -52,6 +53,7 @@ from opensandbox_server.config import AppConfig, INGRESS_MODE_GATEWAY, SecureAcc
 from opensandbox_server.services.constants import (
     SANDBOX_ID_LABEL,
     SANDBOX_MANAGED_VOLUMES_LABEL,
+    SANDBOX_SECURE_ACCESS_TOKEN_METADATA_KEY,
     SANDBOX_TENANT_LABEL,
     SandboxErrorCodes,
 )
@@ -126,6 +128,25 @@ logger = logging.getLogger(__name__)
 _CLUSTER_LOOKUP_FORBIDDEN_BACKOFF_SECONDS = 600.0
 _K8S_DELETION_CONFIRMATION_TIMEOUT_SECONDS = 60.0
 _K8S_DELETION_POLL_INTERVAL_SECONDS = 0.5
+
+
+def _get_annotation_value(workload: Any, key: str) -> Optional[str]:
+    if isinstance(workload, dict):
+        metadata = workload.get("metadata") or {}
+        annotations = metadata.get("annotations") or {}
+    else:
+        metadata = getattr(workload, "metadata", None)
+        annotations = getattr(metadata, "annotations", None) if metadata else None
+    if not isinstance(annotations, dict):
+        return None
+    value = annotations.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _get_workload_name(workload: Any) -> str:
+    if isinstance(workload, dict):
+        return str((workload.get("metadata") or {}).get("name", ""))
+    return str(getattr(getattr(workload, "metadata", None), "name", ""))
 
 
 def _is_namespace_not_found(exc: Exception) -> bool:
@@ -1789,6 +1810,50 @@ class KubernetesSandboxService(K8sDiagnosticsMixin, SandboxService, ExtensionSer
         except Exception as e:
             logger.error(f"Error getting endpoint for {sandbox_id}:{port}: {e}")
             raise _build_k8s_api_error("get endpoint", e) from e
+
+    def rotate_secure_access_token(self, sandbox_id: str) -> RotateSecureAccessResponse:
+        """Replace the workload annotation used by the proxy and ingress gateway."""
+        try:
+            namespace = self._resolve_namespace_for_lookup(sandbox_id)
+            workload = _get_owned_workload_or_404(
+                self.workload_provider,
+                namespace,
+                sandbox_id,
+            )
+            current_token = _get_annotation_value(
+                workload,
+                SANDBOX_SECURE_ACCESS_TOKEN_METADATA_KEY,
+            )
+            if not current_token:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "code": SandboxErrorCodes.INVALID_PARAMETER,
+                        "message": f"Sandbox {sandbox_id} does not have secure access enabled.",
+                    },
+                )
+
+            resource_name = _get_workload_name(workload)
+            new_token = generate_secure_access_token()
+            updated = self.workload_provider.patch_annotations(
+                name=resource_name,
+                namespace=namespace,
+                annotations={SANDBOX_SECURE_ACCESS_TOKEN_METADATA_KEY: new_token},
+            )
+            persisted_token = _get_annotation_value(
+                updated,
+                SANDBOX_SECURE_ACCESS_TOKEN_METADATA_KEY,
+            )
+            if persisted_token != new_token:
+                raise RuntimeError("Kubernetes did not persist the rotated secure-access token")
+
+            logger.info(f"Rotated secure access token for sandbox {sandbox_id}")
+            return RotateSecureAccessResponse(token=new_token)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error rotating secure access token for {sandbox_id}: {e}")
+            raise _build_k8s_api_error("rotate secure access token", e) from e
 
     def _build_signed_endpoint(self, sandbox_id: str, port: int, expires: int) -> Endpoint:
         """Build a signed ingress endpoint per OSEP-0011."""

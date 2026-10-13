@@ -17,7 +17,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from opensandbox_server.api import lifecycle
-from opensandbox_server.api.schema import Endpoint
+from opensandbox_server.api.schema import Endpoint, RotateSecureAccessResponse
 from opensandbox_server.services.constants import (
     OPEN_SANDBOX_INGRESS_HEADER,
     OPEN_SANDBOX_SECURE_ACCESS_HEADER,
@@ -212,6 +212,38 @@ def test_get_endpoint_rejects_non_numeric_port(
     )
 
     assert response.status_code == 422
+
+
+def test_rotate_access_returns_new_token(
+    client: TestClient,
+    auth_headers: dict,
+    monkeypatch,
+) -> None:
+    calls: list[str] = []
+
+    class StubService:
+        @staticmethod
+        def rotate_secure_access_token(sandbox_id: str) -> RotateSecureAccessResponse:
+            calls.append(sandbox_id)
+            return RotateSecureAccessResponse(token="new-token")
+
+    monkeypatch.setattr(lifecycle, "sandbox_service", StubService())
+
+    response = client.post(
+        "/v1/sandboxes/sbx-001/rotate-access",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"token": "new-token"}
+    assert calls == ["sbx-001"]
+
+
+def test_rotate_access_requires_api_key(client: TestClient) -> None:
+    response = client.post("/v1/sandboxes/sbx-001/rotate-access")
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "MISSING_API_KEY"
 
 
 def test_get_endpoint_passes_expires_to_service(

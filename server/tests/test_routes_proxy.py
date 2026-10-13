@@ -29,7 +29,7 @@ from websockets.typing import Origin
 
 import opensandbox_server.api.proxy as proxy_api
 from opensandbox_server.api import lifecycle
-from opensandbox_server.api.schema import Endpoint
+from opensandbox_server.api.schema import Endpoint, RotateSecureAccessResponse
 from opensandbox_server.middleware.auth import SANDBOX_API_KEY_HEADER
 from opensandbox_server.services.constants import OPEN_SANDBOX_EGRESS_AUTH_HEADER, OPEN_SANDBOX_INGRESS_HEADER
 from opensandbox_server.services.constants import OPEN_SANDBOX_SECURE_ACCESS_HEADER
@@ -902,6 +902,50 @@ def test_proxy_allows_valid_secure_access_header(
     assert OPEN_SANDBOX_SECURE_ACCESS_HEADER.lower() not in lowered_headers
     # Other endpoint headers are still forwarded
     assert lowered_headers["opensandbox-ingress-to"] == "sbx-123-44772"
+
+
+def test_proxy_rejects_previous_token_after_rotation(
+    client: TestClient,
+    auth_headers: dict,
+    monkeypatch,
+) -> None:
+    token = {"value": "old-token"}
+
+    class StubService:
+        @staticmethod
+        def get_endpoint(sandbox_id: str, port: int, resolve_internal: bool = False, use_proxy_host: bool = False) -> Endpoint:
+            return Endpoint(
+                endpoint="10.57.1.91:40109/base",
+                headers={OPEN_SANDBOX_SECURE_ACCESS_HEADER: token["value"]},
+            )
+
+        @staticmethod
+        def rotate_secure_access_token(sandbox_id: str):
+            token["value"] = "new-token"
+            return RotateSecureAccessResponse(token="new-token")
+
+    monkeypatch.setattr(lifecycle, "sandbox_service", StubService())
+    fake_client = _FakeAsyncClient()
+    fake_client.response = _FakeStreamingResponse(chunks=[b"root-ok"])
+    _set_http_client(client, fake_client)
+    proxy_url = "/v1/sandboxes/sbx-123/proxy/44772"
+
+    assert client.get(
+        proxy_url,
+        headers={**auth_headers, OPEN_SANDBOX_SECURE_ACCESS_HEADER: "old-token"},
+    ).status_code == 200
+    assert client.post(
+        "/v1/sandboxes/sbx-123/rotate-access",
+        headers=auth_headers,
+    ).json() == {"token": "new-token"}
+    assert client.get(
+        proxy_url,
+        headers={**auth_headers, OPEN_SANDBOX_SECURE_ACCESS_HEADER: "old-token"},
+    ).status_code == 401
+    assert client.get(
+        proxy_url,
+        headers={**auth_headers, OPEN_SANDBOX_SECURE_ACCESS_HEADER: "new-token"},
+    ).status_code == 200
 
 
 def test_proxy_forwards_get_request_with_query_params(
