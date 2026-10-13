@@ -18,6 +18,53 @@
  */
 
 export interface paths {
+    "/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List lifecycle webhooks */
+        get: operations["listWebhooks"];
+        put?: never;
+        /**
+         * Register a lifecycle webhook
+         * @description Registers an HTTP callback for selected sandbox lifecycle events.
+         *     Deliveries are asynchronous and include the
+         *     `X-OpenSandbox-Signature: sha256=<hex>` header. The signature is
+         *     HMAC-SHA256 over `<X-OpenSandbox-Timestamp>.<raw JSON body>`.
+         *     Delivery is retried three times after the initial attempt, then the
+         *     webhook is marked `unavailable`. Delivery failures never fail or block
+         *     sandbox lifecycle operations.
+         */
+        post: operations["registerWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/{webhookId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhookId: string;
+            };
+            cookie?: never;
+        };
+        /** Get lifecycle webhook registration */
+        get: operations["getWebhook"];
+        put?: never;
+        post?: never;
+        /** Delete lifecycle webhook registration */
+        delete: operations["deleteWebhook"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes/{sandboxId}/networkpolicy": {
         parameters: {
             query?: never;
@@ -1022,6 +1069,42 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        RegisterWebhookRequest: {
+            /**
+             * Format: uri
+             * @description Absolute HTTP or HTTPS callback URL without credentials or a fragment
+             */
+            url: string;
+            /** @description Shared secret used for HMAC-SHA256 callback signatures */
+            secret: string;
+            events: components["schemas"]["WebhookEventType"][];
+        };
+        /** @enum {string} */
+        WebhookEventType: "sandbox.created" | "sandbox.running" | "sandbox.expired" | "sandbox.deleted" | "sandbox.failed";
+        WebhookRegistration: {
+            /** @description Server-generated webhook identifier */
+            id: string;
+            /** Format: uri */
+            url: string;
+            events: components["schemas"]["WebhookEventType"][];
+            /**
+             * @description Active until delivery exhausts one initial attempt and three retries
+             * @enum {string}
+             */
+            status: "active" | "unavailable";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ListWebhooksResponse: {
+            items: components["schemas"]["WebhookRegistration"][];
+        };
+        /** @description JSON body delivered to registered lifecycle webhooks */
+        SandboxLifecycleEvent: {
+            type: components["schemas"]["WebhookEventType"];
+            sandboxId: string;
+            /** Format: date-time */
+            occurredAt: string;
+        };
         /**
          * @description SDK-reported metrics event. Phase 1 covers sandbox creation latency from
          *     the start of create until readiness succeeds or creation fails.
@@ -2194,6 +2277,112 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listWebhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registered lifecycle webhooks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListWebhooksResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    registerWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "url": "https://business.example.com/opensandbox/events",
+                 *       "secret": "replace-with-a-shared-secret",
+                 *       "events": [
+                 *         "sandbox.created",
+                 *         "sandbox.running",
+                 *         "sandbox.expired"
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["RegisterWebhookRequest"];
+            };
+        };
+        responses: {
+            /** @description Webhook registered successfully */
+            201: {
+                headers: {
+                    "X-Request-ID": components["headers"]["XRequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookRegistration"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhookId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registered webhook */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookRegistration"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhookId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     getSandboxNetworkPolicy: {
         parameters: {
             query?: never;

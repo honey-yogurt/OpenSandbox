@@ -19,6 +19,7 @@ This module defines FastAPI routes that map to the OpenAPI specification endpoin
 All business logic is delegated to the service layer that backs each operation.
 """
 
+import asyncio
 from typing import List, Optional
 
 from fastapi import APIRouter, Body, Header, HTTPException, Query, Request, status
@@ -33,6 +34,7 @@ from opensandbox_server.api.schema import (
     DeleteSandboxResponse,
     Endpoint,
     ErrorResponse,
+    ListWebhooksResponse,
     ListSnapshotsRequest,
     ListSnapshotsResponse,
     ListSandboxesRequest,
@@ -41,11 +43,13 @@ from opensandbox_server.api.schema import (
     PatchSandboxMetadataRequest,
     RenewSandboxExpirationRequest,
     RenewSandboxExpirationResponse,
+    RegisterWebhookRequest,
     RotateSecureAccessResponse,
     Sandbox,
     SandboxFilter,
     Snapshot,
     SnapshotFilter,
+    WebhookRegistration,
 )
 from opensandbox_server.services.constants import (
     OPEN_SANDBOX_INGRESS_HEADER,
@@ -59,6 +63,10 @@ from opensandbox_server.services.idempotency import (
     IdempotencyKeyError,
     IdempotencyService,
 )
+from opensandbox_server.services.lifecycle_webhooks import (
+    LifecycleWebhookService,
+    SandboxLifecycleWebhookMonitor,
+)
 from opensandbox_server.services.snapshot_restore import resolve_sandbox_image_from_request
 from opensandbox_server.services.snapshot_service import create_snapshot_service
 
@@ -67,6 +75,11 @@ router = APIRouter(tags=["Sandboxes"])
 sandbox_service = create_sandbox_service()
 snapshot_service = create_snapshot_service(sandbox_service)
 idempotency_service = IdempotencyService()
+lifecycle_webhook_service = LifecycleWebhookService()
+lifecycle_webhook_monitor = SandboxLifecycleWebhookMonitor(
+    sandbox_service,
+    lifecycle_webhook_service,
+)
 # React to snapshot status changes so rows converge without waiting on reads
 snapshot_service.start_background_sync()
 
@@ -171,7 +184,9 @@ async def _create_sandbox_once(request: CreateSandboxRequest) -> CreateSandboxRe
     # on the snapshot row selects the fsb vs pod backend for restores.
     if not (request.template_id or "").strip():
         request = await resolve_sandbox_image_from_request(request)
-    return await sandbox_service.create_sandbox(request)
+    response = await sandbox_service.create_sandbox(request)
+    lifecycle_webhook_monitor.observe_created(response.id, response.expires_at)
+    return response
 
 
 @router.get(
@@ -310,7 +325,7 @@ def patch_sandbox_metadata(
         500: {"model": ErrorResponse, "description": "An unexpected server error occurred"},
     },
 )
-def delete_sandbox(
+async def delete_sandbox(
     sandbox_id: str,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID", description="Unique request identifier for tracing"),
 ) -> DeleteSandboxResponse:
@@ -329,9 +344,90 @@ def delete_sandbox(
     Raises:
         HTTPException: If sandbox not found or deletion fails
     """
-    response = sandbox_service.delete_sandbox(sandbox_id)
+    response = await asyncio.to_thread(sandbox_service.delete_sandbox, sandbox_id)
     idempotency_service.release_sandbox(sandbox_id)
+    lifecycle_webhook_monitor.observe_deleted(sandbox_id)
     return response
+
+
+@router.post(
+    "/webhooks",
+    response_model=WebhookRegistration,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        201: {"model": WebhookRegistration, "description": "Webhook registered successfully"},
+        400: {"model": ErrorResponse, "description": "The request was invalid or malformed"},
+        401: {"model": ErrorResponse, "description": "Authentication credentials are missing or invalid"},
+        500: {"model": ErrorResponse, "description": "An unexpected server error occurred"},
+    },
+)
+def register_webhook(
+    request: RegisterWebhookRequest,
+    x_request_id: Optional[str] = Header(None, alias="X-Request-ID", description="Unique request identifier for tracing"),
+) -> WebhookRegistration:
+    return lifecycle_webhook_service.register(request)
+
+
+@router.get(
+    "/webhooks",
+    response_model=ListWebhooksResponse,
+    response_model_exclude_none=True,
+    responses={
+        200: {"model": ListWebhooksResponse, "description": "Registered lifecycle webhooks"},
+        401: {"model": ErrorResponse, "description": "Authentication credentials are missing or invalid"},
+    },
+)
+def list_webhooks(
+    x_request_id: Optional[str] = Header(None, alias="X-Request-ID", description="Unique request identifier for tracing"),
+) -> ListWebhooksResponse:
+    return lifecycle_webhook_service.list()
+
+
+@router.get(
+    "/webhooks/{webhook_id}",
+    response_model=WebhookRegistration,
+    response_model_exclude_none=True,
+    responses={
+        200: {"model": WebhookRegistration, "description": "Registered webhook"},
+        401: {"model": ErrorResponse, "description": "Authentication credentials are missing or invalid"},
+        404: {"model": ErrorResponse, "description": "The requested webhook does not exist"},
+    },
+)
+def get_webhook(
+    webhook_id: str,
+    x_request_id: Optional[str] = Header(None, alias="X-Request-ID", description="Unique request identifier for tracing"),
+) -> WebhookRegistration:
+    try:
+        return lifecycle_webhook_service.get(webhook_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "WEBHOOK_NOT_FOUND", "message": "Webhook not found."},
+        ) from exc
+
+
+@router.delete(
+    "/webhooks/{webhook_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        204: {"description": "Webhook deleted"},
+        401: {"model": ErrorResponse, "description": "Authentication credentials are missing or invalid"},
+        404: {"model": ErrorResponse, "description": "The requested webhook does not exist"},
+    },
+)
+def delete_webhook(
+    webhook_id: str,
+    x_request_id: Optional[str] = Header(None, alias="X-Request-ID", description="Unique request identifier for tracing"),
+) -> Response:
+    try:
+        lifecycle_webhook_service.delete(webhook_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "WEBHOOK_NOT_FOUND", "message": "Webhook not found."},
+        ) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ============================================================================

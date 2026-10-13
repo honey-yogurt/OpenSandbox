@@ -215,6 +215,7 @@ export default defineConfig({
             { text: "Secure Access", link: "/guides/secure-access" },
             { text: "Secure Container", link: "/guides/secure-container" },
             { text: "File Policy", link: "/guides/file-policy" },
+            { text: "Lifecycle Webhooks", link: "/guides/lifecycle-webhooks" },
             { text: "Multi-Tenancy", link: "/guides/multi-tenancy" },
             { text: "Isolation Sessions", link: "/guides/isolation-sessions" },
             { text: "Pause & Resume", link: "/guides/pause-resume" },

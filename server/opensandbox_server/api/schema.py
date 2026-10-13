@@ -22,7 +22,7 @@ for request/response validation and serialization.
 from datetime import datetime
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, PrivateAttr, RootModel, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, RootModel, SecretStr, field_validator, model_validator
 
 from opensandbox_server.constants import (
     IDLE_TIMEOUT_MAX_SECONDS,
@@ -857,6 +857,79 @@ class DeleteSandboxResponse(BaseModel):
         alias="deletedAt",
         description="Deletion acknowledgement timestamp in UTC",
     )
+
+    class Config:
+        populate_by_name = True
+
+
+# ============================================================================
+# Lifecycle Webhooks
+# ============================================================================
+
+WebhookEventType = Literal[
+    "sandbox.created",
+    "sandbox.running",
+    "sandbox.expired",
+    "sandbox.deleted",
+    "sandbox.failed",
+]
+
+
+class RegisterWebhookRequest(BaseModel):
+    """Registration for asynchronous sandbox lifecycle callbacks."""
+
+    url: str = Field(..., description="HTTPS or HTTP URL that receives lifecycle event callbacks")
+    secret: SecretStr = Field(..., min_length=1, description="Shared secret used to sign callback payloads")
+    events: List[WebhookEventType] = Field(..., min_length=1, description="Lifecycle event types to receive")
+
+    @field_validator("url")
+    @classmethod
+    def validate_webhook_url(cls, value: str) -> str:
+        from urllib.parse import urlsplit, urlunsplit
+
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Webhook URL must be an absolute HTTP or HTTPS URL")
+        if parsed.username or parsed.password or parsed.fragment:
+            raise ValueError("Webhook URL must not contain credentials or a fragment")
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", parsed.query, ""))
+
+    @field_validator("events")
+    @classmethod
+    def validate_unique_events(cls, value: List[WebhookEventType]) -> List[WebhookEventType]:
+        if len(value) != len(set(value)):
+            raise ValueError("Webhook events must not contain duplicates")
+        return value
+
+    class Config:
+        extra = "forbid"
+
+
+class WebhookRegistration(BaseModel):
+    """Registered webhook configuration with delivery health."""
+
+    id: str = Field(..., description="Server-generated webhook identifier")
+    url: str = Field(..., description="Configured callback URL")
+    events: List[WebhookEventType] = Field(..., description="Subscribed lifecycle event types")
+    status: Literal["active", "unavailable"] = Field(..., description="Current callback delivery status")
+    created_at: datetime = Field(..., alias="createdAt", description="Registration timestamp in UTC")
+
+    class Config:
+        populate_by_name = True
+
+
+class ListWebhooksResponse(BaseModel):
+    """Registered lifecycle webhooks."""
+
+    items: List[WebhookRegistration] = Field(..., description="Registered webhook configurations")
+
+
+class SandboxLifecycleEvent(BaseModel):
+    """Lifecycle event delivered to a registered webhook."""
+
+    type: WebhookEventType = Field(..., description="Lifecycle event type")
+    sandbox_id: str = Field(..., alias="sandboxId", description="Affected sandbox identifier")
+    occurred_at: datetime = Field(..., alias="occurredAt", description="Event timestamp in UTC")
 
     class Config:
         populate_by_name = True

@@ -104,7 +104,12 @@ def _idle_pause_namespaces() -> list[str]:
 from opensandbox_server.api.devops import router as devops_router  # noqa: E402
 from opensandbox_server.api.metrics import router as metrics_router  # noqa: E402
 from opensandbox_server.api.pool import router as pool_router  # noqa: E402
-from opensandbox_server.api.lifecycle import router, sandbox_service, snapshot_service  # noqa: E402
+from opensandbox_server.api.lifecycle import (  # noqa: E402
+    lifecycle_webhook_monitor,
+    router,
+    sandbox_service,
+    snapshot_service,
+)
 from opensandbox_server.api.proxy import router as proxy_router  # noqa: E402
 from opensandbox_server.api.network_policy import router as policy_router  # noqa: E402
 from opensandbox_server.api.templates import router as templates_router  # noqa: E402
@@ -167,6 +172,7 @@ async def lifespan(app: FastAPI):
     current_default_thread_limiter().total_tokens = app_config.server.thread_pool_size
 
     app.state.http_client = httpx.AsyncClient(timeout=180.0)
+    await lifecycle_webhook_monitor.start()
 
     try:
         docker_client = None
@@ -227,6 +233,7 @@ async def lifespan(app: FastAPI):
     consumer = getattr(app.state, "renew_intent_consumer", None)
     if consumer is not None:
         await consumer.stop()
+    await lifecycle_webhook_monitor.stop()
     shutdown_otel_metrics()
     sandbox_service.close()
     snapshot_service.close()

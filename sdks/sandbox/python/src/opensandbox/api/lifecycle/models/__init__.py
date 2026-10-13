@@ -57,6 +57,7 @@ from .lifecycle_hook import LifecycleHook
 from .list_fsb_templates_response import ListFsbTemplatesResponse
 from .list_sandboxes_response import ListSandboxesResponse
 from .list_snapshots_response import ListSnapshotsResponse
+from .list_webhooks_response import ListWebhooksResponse
 from .metrics_event import MetricsEvent
 from .metrics_event_event_type import MetricsEventEventType
 from .network_policy import NetworkPolicy
@@ -73,6 +74,7 @@ from .platform_spec_arch import PlatformSpecArch
 from .platform_spec_os import PlatformSpecOs
 from .policy_status_response import PolicyStatusResponse
 from .pvc import PVC
+from .register_webhook_request import RegisterWebhookRequest
 from .renew_sandbox_expiration_request import RenewSandboxExpirationRequest
 from .renew_sandbox_expiration_response import RenewSandboxExpirationResponse
 from .resource_limits import ResourceLimits
@@ -80,11 +82,15 @@ from .rotate_secure_access_response import RotateSecureAccessResponse
 from .sandbox import Sandbox
 from .sandbox_extensions import SandboxExtensions
 from .sandbox_lifecycle import SandboxLifecycle
+from .sandbox_lifecycle_event import SandboxLifecycleEvent
 from .sandbox_metadata import SandboxMetadata
 from .sandbox_status import SandboxStatus
 from .snapshot import Snapshot
 from .snapshot_status import SnapshotStatus
 from .volume import Volume
+from .webhook_event_type import WebhookEventType
+from .webhook_registration import WebhookRegistration
+from .webhook_registration_status import WebhookRegistrationStatus
 
 __all__ = (
     "ActivityProbe",
@@ -128,6 +134,7 @@ __all__ = (
     "ListFsbTemplatesResponse",
     "ListSandboxesResponse",
     "ListSnapshotsResponse",
+    "ListWebhooksResponse",
     "MetricsEvent",
     "MetricsEventEventType",
     "NetworkPolicy",
@@ -144,6 +151,7 @@ __all__ = (
     "PlatformSpecOs",
     "PolicyStatusResponse",
     "PVC",
+    "RegisterWebhookRequest",
     "RenewSandboxExpirationRequest",
     "RenewSandboxExpirationResponse",
     "ResourceLimits",
@@ -151,9 +159,13 @@ __all__ = (
     "Sandbox",
     "SandboxExtensions",
     "SandboxLifecycle",
+    "SandboxLifecycleEvent",
     "SandboxMetadata",
     "SandboxStatus",
     "Snapshot",
     "SnapshotStatus",
     "Volume",
+    "WebhookEventType",
+    "WebhookRegistration",
+    "WebhookRegistrationStatus",
 )

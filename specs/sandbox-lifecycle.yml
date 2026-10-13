@@ -44,6 +44,8 @@ security:
 tags:
   - name: Sandboxes
     description: Provision and transition sandboxes through their lifecycle
+  - name: Webhooks
+    description: Register HMAC-signed callbacks for sandbox lifecycle transitions
   - name: Snapshots
     description: Create, list, and delete persistent sandbox snapshots
   - name: Templates
@@ -51,6 +53,91 @@ tags:
   - name: Metrics
     description: Best-effort SDK telemetry ingestion for server-side aggregation
 paths:
+  /webhooks:
+    post:
+      tags: [Webhooks]
+      operationId: registerWebhook
+      summary: Register a lifecycle webhook
+      description: |
+        Registers an HTTP callback for selected sandbox lifecycle events.
+        Deliveries are asynchronous and include the
+        `X-OpenSandbox-Signature: sha256=<hex>` header. The signature is
+        HMAC-SHA256 over `<X-OpenSandbox-Timestamp>.<raw JSON body>`.
+        Delivery is retried three times after the initial attempt, then the
+        webhook is marked `unavailable`. Delivery failures never fail or block
+        sandbox lifecycle operations.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterWebhookRequest'
+            example:
+              url: https://business.example.com/opensandbox/events
+              secret: replace-with-a-shared-secret
+              events: [sandbox.created, sandbox.running, sandbox.expired]
+      responses:
+        '201':
+          description: Webhook registered successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookRegistration'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      tags: [Webhooks]
+      operationId: listWebhooks
+      summary: List lifecycle webhooks
+      responses:
+        '200':
+          description: Registered lifecycle webhooks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListWebhooksResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /webhooks/{webhookId}:
+    parameters:
+      - name: webhookId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Webhooks]
+      operationId: getWebhook
+      summary: Get lifecycle webhook registration
+      responses:
+        '200':
+          description: Registered webhook
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookRegistration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Webhooks]
+      operationId: deleteWebhook
+      summary: Delete lifecycle webhook registration
+      responses:
+        '204':
+          description: Webhook deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /sandboxes/{sandboxId}/networkpolicy:
     parameters:
       - $ref: '#/components/parameters/SandboxId'
@@ -1324,6 +1411,76 @@ components:
         X-Request-ID:
           $ref: '#/components/headers/XRequestId'
   schemas:
+    RegisterWebhookRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          format: uri
+          pattern: '^https?://'
+          description: Absolute HTTP or HTTPS callback URL without credentials or a fragment
+        secret:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: Shared secret used for HMAC-SHA256 callback signatures
+        events:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/WebhookEventType'
+      required: [url, secret, events]
+    WebhookEventType:
+      type: string
+      enum:
+        - sandbox.created
+        - sandbox.running
+        - sandbox.expired
+        - sandbox.deleted
+        - sandbox.failed
+    WebhookRegistration:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Server-generated webhook identifier
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookEventType'
+        status:
+          type: string
+          enum: [active, unavailable]
+          description: Active until delivery exhausts one initial attempt and three retries
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, url, events, status, createdAt]
+    ListWebhooksResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookRegistration'
+      required: [items]
+    SandboxLifecycleEvent:
+      type: object
+      description: JSON body delivered to registered lifecycle webhooks
+      properties:
+        type:
+          $ref: '#/components/schemas/WebhookEventType'
+        sandboxId:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+      required: [type, sandboxId, occurredAt]
     MetricsEvent:
       type: object
       description: |
